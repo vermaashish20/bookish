@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 # Context variable to hold the active request's queue
 stream_queue_var = contextvars.ContextVar("stream_queue_var", default=None)
+stream_event_type_var = contextvars.ContextVar("stream_event_type_var", default="token")
 
 class LLMService:
     @staticmethod
@@ -82,7 +83,8 @@ class LLMService:
                             token = chunk_data["choices"][0]["delta"].get("content", "")
                             if token:
                                 full_content += token
-                                q.put({"event": "token", "text": token})
+                                event_type = stream_event_type_var.get()
+                                q.put({"event": event_type, "text": token})
                                 print(f"[DEBUG OPENAI] Token queued: {token[:20]}...")
                         except Exception as e:
                             print(f"[DEBUG OPENAI] Parse error: {e}")
@@ -132,7 +134,8 @@ class LLMService:
                                 token = chunk_data["delta"].get("text", "")
                                 if token:
                                     full_content += token
-                                    q.put({"event": "token", "text": token})
+                                    event_type = stream_event_type_var.get()
+                                    q.put({"event": event_type, "text": token})
                                     print(f"[DEBUG CLAUDE] Token queued: {token[:20]}...")
                         except Exception as e:
                             print(f"[DEBUG CLAUDE] Parse error: {e}")
@@ -176,7 +179,8 @@ class LLMService:
                             token = chunk_data.get("message", {}).get("content", "")
                             if token:
                                 full_content += token
-                                q.put({"event": "token", "text": token})
+                                event_type = stream_event_type_var.get()
+                                q.put({"event": event_type, "text": token})
                         except Exception:
                             pass
             return full_content
@@ -253,7 +257,8 @@ class LLMService:
                                 full_content += token
                                 
                                 # Put token in queue
-                                q.put({"event": "token", "text": token})
+                                event_type = stream_event_type_var.get()
+                                q.put({"event": event_type, "text": token})
                                 
                                 # Print every 10th token to avoid spam
                                 if token_count % 10 == 0:
@@ -321,7 +326,8 @@ class LLMService:
                             token = chunk_data["choices"][0]["delta"].get("content", "")
                             if token:
                                 full_content += token
-                                q.put({"event": "token", "text": token})
+                                event_type = stream_event_type_var.get()
+                                q.put({"event": event_type, "text": token})
                         except Exception:
                             pass
             return full_content

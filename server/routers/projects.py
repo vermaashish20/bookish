@@ -49,12 +49,15 @@ def register_project(payload: CreateProjectPayload):
     """
     created_at = datetime.utcnow().isoformat()
 
-    # Default empty model routing assignments
+    # Default model routing assignments
     settings_dict = {
-        "plannerModel": {"provider": "Claude", "modelName": "claude-3-5-sonnet"},
-        "writerModel": {"provider": "Claude", "modelName": "claude-3-5-sonnet"},
-        "factCheckerModel": {"provider": "OpenAI", "modelName": "gpt-4o-mini"},
-        "humanizerModel": {"provider": "Claude", "modelName": "claude-3-5-sonnet"}
+        "plannerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "writerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "factCheckerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "humanizerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "researcherModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "editorModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+        "worldBuilderModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"}
     }
 
     # Derive tonality based on genre Category

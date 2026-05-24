@@ -7,9 +7,10 @@ import BookEditor from '../components/BookEditor';
 
 interface BookTabProps {
   book: BookProject;
+  streamedDocumentText?: string;
 }
 
-export default function BookTab({ book }: BookTabProps) {
+export default function BookTab({ book, streamedDocumentText }: BookTabProps) {
   const [activeBookSection, setActiveBookSection] = useState<string>('ch1');
 
   const totalWordCount = book.chapters.reduce(
@@ -25,7 +26,7 @@ export default function BookTab({ book }: BookTabProps) {
         setActiveSection={setActiveBookSection}
         totalWordCount={totalWordCount}
       />
-      <BookEditor book={book} activeSection={activeBookSection} />
+      <BookEditor book={book} activeSection={activeBookSection} streamedDocumentText={streamedDocumentText} />
     </div>
   );
 }

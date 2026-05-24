@@ -11,8 +11,10 @@ from agents.nodes.writer_node import writer_node
 from agents.nodes.fact_checker_node import fact_checker_node
 from agents.nodes.humanizer_node import humanizer_node
 from agents.nodes.editor_node import editor_node
+from agents.nodes.world_builder_node import world_builder_node
 from repository.chat_messages import add_chat_message
 from repository.agent_runs import complete_agent_run
+from repository.chapters import add_chapter, get_project_chapters
 from datetime import datetime
 
 
@@ -47,6 +49,8 @@ def should_continue_tasks(state: AgentOrchestrationState) -> str:
         return "humanizer"
     elif agent_name == "editor":
         return "editor"
+    elif agent_name == "world_builder":
+        return "world_builder"
     else:
         # Unknown agent, skip to finalize
         return "finalize"
@@ -70,35 +74,9 @@ def finalize_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         planner_output = state.get("plannerOutput")
         
         if planner_output:
-            final_response = f"{planner_output['userVisibleSummary']}\n\n"
+            final_response = f"{planner_output['userVisibleSummary']}\n\n*All tasks completed successfully. You can preview the generated artifacts in the Agent Flow trace.*"
         else:
-            final_response = "Task completed.\n\n"
-        
-        # Add agent outputs
-        if state.get("researchNotes"):
-            final_response += "**Research completed.**\n\n"
-        
-        if state.get("draftContent"):
-            final_response += "**Draft created:**\n\n"
-            final_response += state["draftContent"][:500]  # Preview
-            if len(state["draftContent"]) > 500:
-                final_response += "\n\n...(content truncated, see full draft in artifacts)"
-        
-        if state.get("editedContent"):
-            final_response += "\n\n**Edited version:**\n\n"
-            final_response += state["editedContent"][:500]
-            if len(state["editedContent"]) > 500:
-                final_response += "\n\n...(content truncated)"
-        
-        if state.get("humanizedContent"):
-            final_response += "\n\n**Humanized version:**\n\n"
-            final_response += state["humanizedContent"][:500]
-            if len(state["humanizedContent"]) > 500:
-                final_response += "\n\n...(content truncated)"
-        
-        if state.get("factCheckReport"):
-            final_response += "\n\n**Fact Check Report:**\n\n"
-            final_response += state["factCheckReport"][:300]
+            final_response = "Task completed successfully. You can preview the generated artifacts in the Agent Flow trace."
     
     # Save assistant message
     final_message_id = add_chat_message(
@@ -117,6 +95,9 @@ def finalize_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     )
     
     thinking += f"[Orchestrator] Execution completed. Message saved: {final_message_id}\n"
+    
+    # Note: Chapters are now created by writer (as draft) and updated by editor (to published)
+    # No need to create chapters here anymore
     
     # Update state
     state["finalResponse"] = final_response
@@ -149,6 +130,7 @@ def build_orchestration_graph():
     workflow.add_node("fact_checker", fact_checker_node)
     workflow.add_node("humanizer", humanizer_node)
     workflow.add_node("editor", editor_node)
+    workflow.add_node("world_builder", world_builder_node)
     workflow.add_node("finalize", finalize_node)
     
     # Set conditional entry point
@@ -173,6 +155,7 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )
@@ -187,6 +170,7 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )
@@ -200,6 +184,7 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )
@@ -213,6 +198,7 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )
@@ -226,6 +212,7 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )
@@ -239,6 +226,21 @@ def build_orchestration_graph():
             "fact_checker": "fact_checker",
             "humanizer": "humanizer",
             "editor": "editor",
+            "world_builder": "world_builder",
+            "finalize": "finalize"
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "world_builder",
+        should_continue_tasks,
+        {
+            "researcher": "researcher",
+            "writer": "writer",
+            "fact_checker": "fact_checker",
+            "humanizer": "humanizer",
+            "editor": "editor",
+            "world_builder": "world_builder",
             "finalize": "finalize"
         }
     )

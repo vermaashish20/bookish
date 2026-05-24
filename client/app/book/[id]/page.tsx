@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BookProject, ChatMessage, Asset, ProjectSettings } from '../../types';
-import { submitMessageStream, saveSettings as apiSaveSettings, uploadAsset as apiUploadAsset, uploadAssetFile as apiUploadAssetFile, fetchProject as apiFetchProject, fetchSettings as apiFetchSettings, SettingsPayload } from '../../lib/api';
+import { submitMessageStream, saveSettings as apiSaveSettings, uploadAsset as apiUploadAsset, uploadAssetFile as apiUploadAssetFile, fetchProject as apiFetchProject, fetchSettings as apiFetchSettings, SettingsPayload, resumeAgent } from '../../lib/api';
 import AddAssetModal from '../../components/AddAssetModal';
 import AgentTab from '../../pages/AgentTab';
 import BookTab from '../../pages/BookTab';
@@ -38,17 +38,28 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
   const [promptInput, setPromptInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isAgentThinking, setIsAgentThinking] = useState(false);
+  const [currentAgentStatus, setCurrentAgentStatus] = useState<string>('');
+  const [streamedDocumentText, setStreamedDocumentText] = useState<string>('');
+  const [pendingConfirmation, setPendingConfirmation] = useState<{ text: string, run_id: string } | null>(null);
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetType, setNewAssetType] = useState('Markdown File');
 
   // Project settings states
   type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
-  const [plannerProvider, setPlannerProvider] = useState<ProviderType>('Claude');
-  const [plannerModel, setPlannerModel] = useState('claude-3-5-sonnet');
-  const [writerProvider, setWriterProvider] = useState<ProviderType>('Claude');
-  const [writerModel, setWriterModel] = useState('claude-3-5-sonnet');
-  const [checkerProvider, setCheckerProvider] = useState<ProviderType>('OpenAI');
-  const [checkerModel, setCheckerModel] = useState('gpt-4o-mini');
+  const [plannerProvider, setPlannerProvider] = useState<ProviderType>('Nvidia');
+  const [plannerModel, setPlannerModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [writerProvider, setWriterProvider] = useState<ProviderType>('Nvidia');
+  const [writerModel, setWriterModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [checkerProvider, setCheckerProvider] = useState<ProviderType>('Nvidia');
+  const [checkerModel, setCheckerModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [researcherProvider, setResearcherProvider] = useState<ProviderType>('Nvidia');
+  const [researcherModel, setResearcherModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [humanizerProvider, setHumanizerProvider] = useState<ProviderType>('Nvidia');
+  const [humanizerModel, setHumanizerModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [editorProvider, setEditorProvider] = useState<ProviderType>('Nvidia');
+  const [editorModel, setEditorModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
+  const [worldBuilderProvider, setWorldBuilderProvider] = useState<ProviderType>('Nvidia');
+  const [worldBuilderModel, setWorldBuilderModel] = useState('mistralai/mistral-large-3-675b-instruct-2512');
   const [anthropicKey, setAnthropicKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
@@ -141,12 +152,20 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
       apiFetchSettings(bookId)
         .then((settings: any) => {
           if (settings) {
-            setPlannerProvider(settings.plannerModel?.provider || 'Claude');
-            setPlannerModel(settings.plannerModel?.modelName || 'claude-3-5-sonnet');
-            setWriterProvider(settings.writerModel?.provider || 'Claude');
-            setWriterModel(settings.writerModel?.modelName || 'claude-3-5-sonnet');
-            setCheckerProvider(settings.factCheckerModel?.provider || 'OpenAI');
-            setCheckerModel(settings.factCheckerModel?.modelName || 'gpt-4o-mini');
+            setPlannerProvider(settings.plannerModel?.provider || 'Nvidia');
+            setPlannerModel(settings.plannerModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setWriterProvider(settings.writerModel?.provider || 'Nvidia');
+            setWriterModel(settings.writerModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setCheckerProvider(settings.factCheckerModel?.provider || 'Nvidia');
+            setCheckerModel(settings.factCheckerModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setResearcherProvider(settings.researcherModel?.provider || 'Nvidia');
+            setResearcherModel(settings.researcherModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setHumanizerProvider(settings.humanizerModel?.provider || 'Nvidia');
+            setHumanizerModel(settings.humanizerModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setEditorProvider(settings.editorModel?.provider || 'Nvidia');
+            setEditorModel(settings.editorModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
+            setWorldBuilderProvider(settings.worldBuilderModel?.provider || 'Nvidia');
+            setWorldBuilderModel(settings.worldBuilderModel?.modelName || 'mistralai/mistral-large-3-675b-instruct-2512');
 
             const allModels = [
               settings.plannerModel,
@@ -214,9 +233,12 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
 
     const newSettings: ProjectSettings = {
       plannerModel: { provider: plannerProvider, modelName: plannerModel, apiKey: resolveKey(plannerProvider), endpointUrl: resolveEndpoint(plannerProvider) },
-      writerModel:  { provider: writerProvider,  modelName: writerModel,  apiKey: resolveKey(writerProvider),  endpointUrl: resolveEndpoint(writerProvider)  },
+      writerModel: { provider: writerProvider, modelName: writerModel, apiKey: resolveKey(writerProvider), endpointUrl: resolveEndpoint(writerProvider) },
       factCheckerModel: { provider: checkerProvider, modelName: checkerModel, apiKey: resolveKey(checkerProvider), endpointUrl: resolveEndpoint(checkerProvider) },
-      humanizerModel: { provider: writerProvider, modelName: writerModel, apiKey: resolveKey(writerProvider), endpointUrl: resolveEndpoint(writerProvider) }
+      humanizerModel: { provider: humanizerProvider, modelName: humanizerModel, apiKey: resolveKey(humanizerProvider), endpointUrl: resolveEndpoint(humanizerProvider) },
+      researcherModel: { provider: researcherProvider, modelName: researcherModel, apiKey: resolveKey(researcherProvider), endpointUrl: resolveEndpoint(researcherProvider) },
+      editorModel: { provider: editorProvider, modelName: editorModel, apiKey: resolveKey(editorProvider), endpointUrl: resolveEndpoint(editorProvider) },
+      worldBuilderModel: { provider: worldBuilderProvider, modelName: worldBuilderModel, apiKey: resolveKey(worldBuilderProvider), endpointUrl: resolveEndpoint(worldBuilderProvider) }
     };
 
     const updatedBook: BookProject = { ...book, settings: newSettings };
@@ -278,6 +300,9 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
     setChatMessages([...updatedMessages, initialAgentMsg]);
     setPromptInput('');
     setIsAgentThinking(true);
+    setCurrentAgentStatus('');
+    setStreamedDocumentText('');
+    setPendingConfirmation(null);
 
     let tokenCount = 0;
 
@@ -287,7 +312,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
       await submitMessageStream(book.id, capturedInput, (chunk) => {
         console.log('[DEBUG PAGE] Chunk received:', chunk.event, chunk.text ? `"${chunk.text.substring(0, 30)}..."` : '');
         
-        if (chunk.event === 'token') {
+        if (chunk.event === 'chat_message' || chunk.event === 'token') {
           tokenCount++;
           if (tokenCount % 10 === 0) {
             console.log(`[DEBUG PAGE] ✅ Token #${tokenCount} - updating UI`);
@@ -300,6 +325,12 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                 : msg
             )
           );
+        } else if (chunk.event === 'document_stream') {
+          setStreamedDocumentText((prev) => prev + (chunk.text || ''));
+        } else if (chunk.event === 'agent_status') {
+          setCurrentAgentStatus(chunk.text || '');
+        } else if (chunk.event === 'user_confirmation') {
+          setPendingConfirmation({ text: chunk.text || 'Do you approve?', run_id: chunk.run_id || '' });
         } else if (chunk.event === 'done') {
           console.log('[DEBUG PAGE] ✅ Done event received');
           console.log('[DEBUG PAGE] Final reply length:', chunk.reply?.length || 0);
@@ -353,7 +384,19 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
       );
     } finally {
       setIsAgentThinking(false);
+      setCurrentAgentStatus('');
+      setPendingConfirmation(null);
       console.log('[DEBUG PAGE] Agent thinking set to false');
+    }
+  };
+
+  const handleResume = async (decision: string) => {
+    if (!pendingConfirmation || !book) return;
+    try {
+      await resumeAgent(book.id, pendingConfirmation.run_id, decision);
+      setPendingConfirmation(null);
+    } catch (err) {
+      console.error("Failed to resume agent:", err);
     }
   };
 
@@ -526,14 +569,18 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
               book={book}
               chatMessages={chatMessages}
               isAgentThinking={isAgentThinking}
+              currentAgentStatus={currentAgentStatus}
               promptInput={promptInput}
               setPromptInput={setPromptInput}
               onSendPrompt={handleSendPrompt}
+              pendingConfirmation={pendingConfirmation}
+              onResume={handleResume}
+              streamedDocumentText={streamedDocumentText}
             />
           )}
 
           {/* TAB 2: BOOK LAYOUT OUTLINE & SIMULATED A4 TIPTAP EDITOR */}
-          {activeTab === 'Book' && <BookTab book={book} />}
+          {activeTab === 'Book' && <BookTab book={book} streamedDocumentText={streamedDocumentText} />}
 
           {/* TAB 3: COGNITIVE MEMORY WORKSPACE */}
           {activeTab === 'Memory' && book && (
@@ -576,6 +623,22 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
               setCheckerProvider={setCheckerProvider}
               checkerModel={checkerModel}
               setCheckerModel={setCheckerModel}
+              researcherProvider={researcherProvider}
+              setResearcherProvider={setResearcherProvider}
+              researcherModel={researcherModel}
+              setResearcherModel={setResearcherModel}
+              humanizerProvider={humanizerProvider}
+              setHumanizerProvider={setHumanizerProvider}
+              humanizerModel={humanizerModel}
+              setHumanizerModel={setHumanizerModel}
+              editorProvider={editorProvider}
+              setEditorProvider={setEditorProvider}
+              editorModel={editorModel}
+              setEditorModel={setEditorModel}
+              worldBuilderProvider={worldBuilderProvider}
+              setWorldBuilderProvider={setWorldBuilderProvider}
+              worldBuilderModel={worldBuilderModel}
+              setWorldBuilderModel={setWorldBuilderModel}
               anthropicKey={anthropicKey}
               setAnthropicKey={setAnthropicKey}
               geminiKey={geminiKey}

@@ -4,8 +4,9 @@ from repository.projects import get_project, get_unified_project_payload
 from repository.messages import get_messages
 from agents.orchestrator import initialize_orchestration_state
 from agents.orchestration_graph import new_orchestration_graph
-from models.schemas import MessageSubmitPayload
+from models.schemas import MessageSubmitPayload, ResumePayload
 from services.llm_service import stream_queue_var
+from agents.hitl_state import resume_hitl_event
 import queue
 import contextvars
 import threading
@@ -152,3 +153,18 @@ async def submit_message(id: str, payload: MessageSubmitPayload):
             "X-Accel-Buffering": "no"
         }
     )
+
+@router.post("/{id}/resume")
+async def resume_agent(id: str, payload: ResumePayload):
+    """
+    Resume a suspended agent thread by supplying a user response.
+    """
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+        
+    success = resume_hitl_event(payload.run_id, payload.response)
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid run_id or agent is not paused.")
+        
+    return {"status": "resumed", "response": payload.response}

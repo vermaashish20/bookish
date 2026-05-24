@@ -47,6 +47,9 @@ export interface DecisionItem {
   agent: string;
   action: string;
   resolution: string;
+  artifactId?: string;
+  artifactType?: string;
+  artifactContent?: string;
 }
 
 export interface TonalityFingerprint {
@@ -76,9 +79,12 @@ export interface ModelConfig {
 
 export interface ProjectSettings {
   plannerModel: ModelConfig;
+  researcherModel: ModelConfig;
   writerModel: ModelConfig;
   factCheckerModel: ModelConfig;
   humanizerModel: ModelConfig;
+  editorModel: ModelConfig;
+  worldBuilderModel: ModelConfig;
 }
 
 export interface BookProject {

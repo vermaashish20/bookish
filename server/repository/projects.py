@@ -1,12 +1,14 @@
 from typing import Dict, Any, Optional, List
 from bson import ObjectId
 from db.mongo import get_db
+from db.chroma import delete_project_vectors
 
 from repository.assets import get_project_assets
 from repository.callbacks import get_project_callbacks
 from repository.chapters import get_project_chapters
 from repository.characters import get_project_characters
 from repository.logs import get_project_logs
+from repository.agent_runs import get_project_agent_runs
 
 def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     p = get_project(project_id)
@@ -28,6 +30,47 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "witty": 1.0 if tonality_key == "witty" else 0.0,
     }
         
+    # Build decisionLog from agent_runs
+    agent_runs = get_project_agent_runs(project_id)
+    decision_log = []
+    
+    # Process runs in chronological order (earliest first for log display)
+    for run in reversed(agent_runs):
+        # 1. Planner decision
+        if run.get("plannerDecision"):
+            decision_log.append({
+                "timestamp": run.get("startedAt", ""),
+                "step": "Planning",
+                "agent": "Planner",
+                "action": "Created execution plan",
+                "resolution": run["plannerDecision"].get("decision", "Task analysis complete")
+            })
+            
+        # 2. Agent Executions
+        for exec_item in run.get("agentExecutions", []):
+            status = exec_item.get("status", "")
+            resolution_text = "Completed" if status == "completed" else status.capitalize()
+            
+            decision_item = {
+                "timestamp": exec_item.get("startedAt") or run.get("startedAt", ""),
+                "step": "Execution",
+                "agent": exec_item.get("agent", "Agent").capitalize(),
+                "action": exec_item.get("taskInput", "Task")[:50] + "...",
+                "resolution": f"[{status.upper()}]"
+            }
+            
+            # Fetch artifact if present
+            artifact_id = exec_item.get("outputArtifactId")
+            if artifact_id:
+                from repository.artifacts import get_artifact
+                artifact = get_artifact(artifact_id)
+                if artifact:
+                    decision_item["artifactId"] = artifact_id
+                    decision_item["artifactType"] = artifact.get("artifactType", "")
+                    decision_item["artifactContent"] = artifact.get("content", "")
+            
+            decision_log.append(decision_item)
+            
     return {
         "id": p["_id"],
         "title": p["title"],
@@ -49,16 +92,7 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
                 **tonality_scores,
                 "forbiddenPhrases": []
             },
-            "decisionLog": [
-                {
-                    "timestamp": log["timestamp"],
-                    "step": "Generations complete" if log["sender"] == "Writer" else "Workspace outline initialized",
-                    "agent": log["sender"],
-                    "action": log["text"].split(".")[0],
-                    "resolution": log["text"]
-                }
-                for log in logs if log["sender"] != "user"
-            ]
+            "decisionLog": decision_log
         }
     }
 
@@ -129,14 +163,24 @@ def create_project(title: str, subtitle: str, genre: str, tonality: str, created
     return project_id
 
 def delete_project(project_id: str):
-    """Hard-delete a project and all related documents from every collection."""
+    """Hard-delete a project and all related documents from every collection and vector db."""
     db = get_db()
+    
+    # 1. Delete all MongoDB documents associated with the project
     db.projects.delete_one({"_id": project_id})
     db.chapters.delete_many({"projectId": project_id})
     db.user_assets.delete_many({"projectId": project_id})
     db.episodic_logs.delete_many({"projectId": project_id})
     db.character_bible.delete_many({"projectId": project_id})
+    db.entity_bible.delete_many({"projectId": project_id})
     db.callback_index.delete_many({"projectId": project_id})
+    db.agent_runs.delete_many({"projectId": project_id})
+    db.artifacts.delete_many({"projectId": project_id})
+    db.chat_messages.delete_many({"projectId": project_id})
+    db.project_memory.delete_many({"projectId": project_id})
+    
+    # 2. Delete all related vectors from ChromaDB
+    delete_project_vectors(project_id)
 
 def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     db = get_db()

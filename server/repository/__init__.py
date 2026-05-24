@@ -11,7 +11,13 @@ from repository.chapters import (
     shift_chapters_upstream,
     update_chapter_content,
 )
-from repository.characters import add_character, get_project_characters
+from repository.characters import add_character, get_project_characters, update_character
+from repository.entities import (
+    add_entity,
+    get_project_entities,
+    update_entity,
+    delete_entity,
+)
 from repository.logs import add_episodic_log, get_project_logs
 from repository.projects import (
     create_project,
@@ -56,6 +62,11 @@ __all__ = [
     "add_callback",
     "add_chapter",
     "add_character",
+    "update_character",
+    "add_entity",
+    "get_project_entities",
+    "update_entity",
+    "delete_entity",
     "add_episodic_log",
     "add_user_asset",
     "create_project",

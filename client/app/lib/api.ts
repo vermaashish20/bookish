@@ -54,6 +54,9 @@ export const API_ENDPOINTS = {
       submit: (id: string) => `/api/projects/${id}/message`,
       list: (id: string) => `/api/projects/${id}/messages`,
     },
+    
+    // HITL Resume
+    resume: (id: string) => `/api/projects/${id}/resume`,
   },
 } as const;
 
@@ -214,6 +217,7 @@ export const submitMessageStream = async (
     cost?: number;
     tokens?: number;
     error?: string;
+    run_id?: string;
   }) => void
 ): Promise<void> => {
   console.log('='.repeat(80));
@@ -321,3 +325,16 @@ export const submitMessageStream = async (
  */
 export const fetchProjectMessages = (id: string) =>
   request<unknown[]>(API_ENDPOINTS.projects.messages.list(id));
+
+/**
+ * POST /api/projects/:id/resume
+ * Resume a paused agent thread
+ * @param id - Project ID
+ * @param runId - Agent run ID
+ * @param response - User's response (e.g. 'yes' or 'no')
+ */
+export const resumeAgent = (id: string, runId: string, response: string) =>
+  request<{ status: string; response: string }>(API_ENDPOINTS.projects.resume(id), {
+    method: 'POST',
+    body: JSON.stringify({ run_id: runId, response }),
+  });

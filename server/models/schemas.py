@@ -28,3 +28,7 @@ class PromptSubmitPayload(BaseModel):
 class MessageSubmitPayload(BaseModel):
     message: Optional[str] = None
     prompt: Optional[str] = None  # fallback for backward compatibility
+
+class ResumePayload(BaseModel):
+    run_id: str
+    response: str

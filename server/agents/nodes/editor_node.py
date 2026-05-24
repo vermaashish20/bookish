@@ -3,7 +3,7 @@ Editor Node - Review grammar, pacing, structure, and readability
 """
 from agents.orchestration_state import AgentOrchestrationState
 from agents.utils import load_prompt
-from services.llm_service import call_llm
+from services.llm_service import call_llm, stream_queue_var, stream_event_type_var
 from repository.artifacts import create_artifact
 from repository.agent_runs import add_agent_execution, update_agent_execution
 from repository.projects import get_project
@@ -30,6 +30,10 @@ def editor_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         return state
         
     thinking = f"[Editor] Starting editing and proofing task: {current_task['task']}\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": "📝 Editor is polishing the draft..."})
     
     # Update task status
     state["tasks"][current_task_idx]["status"] = "running"
@@ -80,15 +84,19 @@ Target Tonality Preset: {project.get('tonality', 'Conversational')}
     fallback_text = source_text or f"[Edited content for: {current_task['task']}]"
     
     # Call LLM
-    edited_content = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        default_fallback=fallback_text,
-        base_url=base_url
-    )
+    token = stream_event_type_var.set("document_stream")
+    try:
+        edited_content = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            default_fallback=fallback_text,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     thinking += f"[Editor] Proofing complete. Word count: {len(edited_content.split())}\n"
     
@@ -124,6 +132,27 @@ Target Tonality Preset: {project.get('tonality', 'Conversational')}
     
     thinking += f"[Editor] Edited artifact committed (artifact: {artifact_id})\n"
     
+    # Update chapter in MongoDB to "published" status
+    from repository.chapters import update_chapter_content
+    
+    # Get chapter_id from previous task (writer should have set it)
+    chapter_id = None
+    for task in state["tasks"]:
+        if task.get("agent") == "writer" and task.get("chapterId"):
+            chapter_id = task["chapterId"]
+            break
+    
+    if chapter_id:
+        update_chapter_content(
+            chapter_id=chapter_id,
+            content=edited_content,
+            word_count=word_count,
+            status="published"
+        )
+        thinking += f"[Editor] Chapter {chapter_id} updated to 'published' status\n"
+    else:
+        thinking += "[Editor] Warning: No chapter_id found from writer task\n"
+    
     # Update state
     state["editedContent"] = edited_content
     # Also update draftContent so the final result is the fully polished version
@@ -145,4 +174,24 @@ Target Tonality Preset: {project.get('tonality', 'Conversational')}
         output_artifact_id=artifact_id
     )
     
+    # Pause for HITL confirmation
+    from agents.hitl_state import create_hitl_event, get_hitl_response
+    q = stream_queue_var.get()
+    if q:
+        q.put({
+            "event": "user_confirmation",
+            "text": "I have finished polishing the draft. Do you approve?",
+            "run_id": state["agentRunId"]
+        })
+    
+    thinking += "[Editor] Waiting for user confirmation...\n"
+    event = create_hitl_event(state["agentRunId"])
+    event.wait()
+    
+    response = get_hitl_response(state["agentRunId"])
+    thinking += f"[Editor] User responded: {response}\n"
+    
+    if str(response).lower() in ['no', 'reject', 'false']:
+        raise Exception("Run aborted by user.")
+        
     return state

@@ -3,7 +3,7 @@ Fact-Checker Node - Verify factual accuracy and internal consistency
 """
 from agents.orchestration_state import AgentOrchestrationState
 from agents.utils import load_prompt
-from services.llm_service import call_llm
+from services.llm_service import call_llm, stream_queue_var, stream_event_type_var
 from repository.artifacts import create_artifact
 from repository.agent_runs import add_agent_execution, update_agent_execution
 from repository.projects import get_project
@@ -31,6 +31,10 @@ def fact_checker_node(state: AgentOrchestrationState) -> AgentOrchestrationState
         return state
         
     thinking = f"[Fact-Checker] Starting fact check audit: {current_task['task']}\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": "🧐 Fact-Checker is auditing the draft..."})
     
     # Update task status
     state["tasks"][current_task_idx]["status"] = "running"
@@ -115,15 +119,19 @@ Tonality: {project.get('tonality', 'Conversational')}
     default_report = f"# Fact Check Audit Report\n\nAudit completed for: {current_task['task']}\nStatus: Verified (Default Fallback)"
     
     # Call LLM
-    report_content = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        default_fallback=default_report,
-        base_url=base_url
-    )
+    token = stream_event_type_var.set("hidden_stream")
+    try:
+        report_content = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            default_fallback=default_report,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     thinking += "[Fact-Checker] Audit analysis complete.\n"
     
@@ -172,4 +180,24 @@ Tonality: {project.get('tonality', 'Conversational')}
         output_artifact_id=artifact_id
     )
     
+    # Pause for HITL confirmation
+    from agents.hitl_state import create_hitl_event, get_hitl_response
+    q = stream_queue_var.get()
+    if q:
+        q.put({
+            "event": "user_confirmation",
+            "text": "I have completed the fact check and continuity audit. Do you approve?",
+            "run_id": state["agentRunId"]
+        })
+    
+    thinking += "[Fact-Checker] Waiting for user confirmation...\n"
+    event = create_hitl_event(state["agentRunId"])
+    event.wait()
+    
+    response = get_hitl_response(state["agentRunId"])
+    thinking += f"[Fact-Checker] User responded: {response}\n"
+    
+    if str(response).lower() in ['no', 'reject', 'false']:
+        raise Exception("Run aborted by user.")
+        
     return state

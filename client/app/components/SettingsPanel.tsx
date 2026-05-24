@@ -17,6 +17,22 @@ interface SettingsPanelProps {
   setCheckerProvider: (value: ProviderType) => void;
   checkerModel: string;
   setCheckerModel: (value: string) => void;
+  researcherProvider: ProviderType;
+  setResearcherProvider: (value: ProviderType) => void;
+  researcherModel: string;
+  setResearcherModel: (value: string) => void;
+  humanizerProvider: ProviderType;
+  setHumanizerProvider: (value: ProviderType) => void;
+  humanizerModel: string;
+  setHumanizerModel: (value: string) => void;
+  editorProvider: ProviderType;
+  setEditorProvider: (value: ProviderType) => void;
+  editorModel: string;
+  setEditorModel: (value: string) => void;
+  worldBuilderProvider: ProviderType;
+  setWorldBuilderProvider: (value: ProviderType) => void;
+  worldBuilderModel: string;
+  setWorldBuilderModel: (value: string) => void;
   anthropicKey: string;
   setAnthropicKey: (value: string) => void;
   geminiKey: string;
@@ -49,38 +65,200 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-5">
           <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">LLM Router Assignments</h3>
 
-          {(['Planner', 'Writer', 'Fact-Checker'] as const).map((label) => {
-            const isChecker = label === 'Fact-Checker';
-            const provider = isChecker ? props.checkerProvider : label === 'Planner' ? props.plannerProvider : props.writerProvider;
-            const setProvider = isChecker ? props.setCheckerProvider : label === 'Planner' ? props.setPlannerProvider : props.setWriterProvider;
-            const model = isChecker ? props.checkerModel : label === 'Planner' ? props.plannerModel : props.writerModel;
-            const setModel = isChecker ? props.setCheckerModel : label === 'Planner' ? props.setPlannerModel : props.setWriterModel;
+          {/* Planner Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Planner Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R | MongoDB: R | LLM: ✓</p>
+            </div>
+            <select
+              value={props.plannerProvider}
+              onChange={(e) => props.setPlannerProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.plannerModel}
+              onChange={(e) => props.setPlannerModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
 
-            return (
-              <div key={label} className="grid gap-4 sm:grid-cols-3 items-center">
-                <span className="text-xs font-semibold text-zinc-700">{label} Agent Node</span>
-                <select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value as any)}
-                  className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                >
-                  <option value="Claude">Anthropic Claude</option>
-                  <option value="Gemini">Google Gemini</option>
-                  <option value="OpenAI">OpenAI GPT-4</option>
-                  <option value="Nvidia">NVIDIA NIM</option>
-                  <option value="Ollama">Ollama (Localhost)</option>
-                  <option value="Custom">Custom Endpoint</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Model Name"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-            );
-          })}
+          {/* Researcher Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Researcher Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R/W | MongoDB: R | LLM: ✓</p>
+            </div>
+            <select
+              value={props.researcherProvider}
+              onChange={(e) => props.setResearcherProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.researcherModel}
+              onChange={(e) => props.setResearcherModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* Writer Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Writer Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
+            </div>
+            <select
+              value={props.writerProvider}
+              onChange={(e) => props.setWriterProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.writerModel}
+              onChange={(e) => props.setWriterModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* Fact-Checker Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Fact-Checker Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R/W | MongoDB: R | LLM: ✓</p>
+            </div>
+            <select
+              value={props.checkerProvider}
+              onChange={(e) => props.setCheckerProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.checkerModel}
+              onChange={(e) => props.setCheckerModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* Humanizer Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Humanizer Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R | LLM: ✓</p>
+            </div>
+            <select
+              value={props.humanizerProvider}
+              onChange={(e) => props.setHumanizerProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.humanizerModel}
+              onChange={(e) => props.setHumanizerModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* Editor Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">Editor Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
+            </div>
+            <select
+              value={props.editorProvider}
+              onChange={(e) => props.setEditorProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.editorModel}
+              onChange={(e) => props.setEditorModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* World Builder Agent */}
+          <div className="grid gap-4 sm:grid-cols-3 items-start">
+            <div>
+              <span className="text-xs font-semibold text-zinc-700">World Builder Agent Node</span>
+              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
+            </div>
+            <select
+              value={props.worldBuilderProvider}
+              onChange={(e) => props.setWorldBuilderProvider(e.target.value as any)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="Claude">Anthropic Claude</option>
+              <option value="Gemini">Google Gemini</option>
+              <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="Nvidia">NVIDIA NIM</option>
+              <option value="Ollama">Ollama (Localhost)</option>
+              <option value="Custom">Custom Endpoint</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Model Name"
+              value={props.worldBuilderModel}
+              onChange={(e) => props.setWorldBuilderModel(e.target.value)}
+              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          <div className="pt-2 border-t border-zinc-100">
+            <p className="text-[9px] text-zinc-400">
+              <span className="font-semibold">Capabilities:</span> R = Read, W = Write, ✓ = LLM Call
+            </p>
+          </div>
         </div>
 
         {/* API Credentials card */}

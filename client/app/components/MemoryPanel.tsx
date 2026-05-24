@@ -5,6 +5,8 @@ import { BookProject } from '../types';
 import UserContextTimeline from './UserContextTimeline';
 import AgentMemoryStores from './AgentMemoryStores';
 import ExecutionTimeline from './ExecutionTimeline';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface MemoryPanelProps {
   book: BookProject;
@@ -25,36 +27,78 @@ export default function MemoryPanel({
 }: MemoryPanelProps) {
   const renderPreviewCanvasContent = () => {
     if (!selectedPreviewItem) return null;
+    
+    // Helper to strip JSON markdown and parse it into readable text
+    const formatContentForPreview = (text: string) => {
+      let cleanText = text;
+      const jsonMatch = text.match(/```(?:json)?\n([\s\S]*?)```/);
+      if (jsonMatch) cleanText = jsonMatch[1];
+      
+      try {
+        const parsed = JSON.parse(cleanText);
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => {
+            if (typeof item === 'object' && item !== null) {
+              return Object.entries(item).map(([k, v]) => {
+                if (typeof v === 'object') {
+                  return `**${k.charAt(0).toUpperCase() + k.slice(1)}**:\n` + Object.entries(v || {}).map(([vk, vv]) => `  - ${vk}: ${vv}`).join('\n');
+                }
+                return `**${k.charAt(0).toUpperCase() + k.slice(1)}**: ${v}`;
+              }).join('\n\n');
+            }
+            return String(item);
+          }).join('\n\n---\n\n');
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          return Object.entries(parsed).map(([k, v]) => `**${k.charAt(0).toUpperCase() + k.slice(1)}**: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n\n');
+        }
+      } catch (e) {
+        return text;
+      }
+      return text;
+    };
+    
+    const artifactContentToDisplay = selectedPreviewItem.artifactContent ? formatContentForPreview(selectedPreviewItem.artifactContent) : '';
+    const fullContentToDisplay = selectedPreviewItem.content + (artifactContentToDisplay ? `\n\n---\n\n## Artifact Generated\n\n${artifactContentToDisplay}` : '');
 
     return (
-      <div className="w-full h-full flex flex-col bg-white border border-zinc-250 rounded-lg shadow-xs overflow-hidden font-sans select-text">
-        <div className="flex justify-between items-center bg-zinc-50 px-4 py-2 border-b border-zinc-200 select-none text-[10px] shrink-0 text-zinc-500 font-semibold uppercase tracking-wider">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-            <span className="text-zinc-700 truncate max-w-[180px]">{selectedPreviewItem.title}</span>
-            <span className="text-zinc-300">|</span>
-            <span className="text-zinc-400 normal-case">{selectedPreviewItem.subtitle || selectedPreviewItem.type}</span>
+      <div className="w-full h-full flex flex-col font-sans select-text relative">
+        <div className="flex justify-between items-center bg-white/95 backdrop-blur px-8 py-6 border-b border-zinc-100 select-none text-[10px] shrink-0 text-zinc-500 font-semibold uppercase tracking-widest z-10">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-zinc-700">{selectedPreviewItem.title?.replace('Timeline Log: ', '') || selectedPreviewItem.subtitle?.split(' ')[0] || 'Node'}</span>
+            <span>•</span>
+            <span>{selectedPreviewItem.type?.replace('_', ' ') || 'Document'}</span>
           </div>
           <button
             type="button"
             onClick={() => setSelectedPreviewItem(null)}
-            className="text-zinc-400 hover:text-zinc-700 text-xs font-bold transition focus:outline-none cursor-pointer"
+            className="text-zinc-400 hover:text-zinc-700 text-sm font-bold transition focus:outline-none cursor-pointer w-6 h-6 flex items-center justify-center rounded-full hover:bg-zinc-100"
             title="Close Preview"
           >
-            x
+            ✕
           </button>
         </div>
 
-        <div className="flex-1 p-5 overflow-y-auto bg-zinc-50/10 font-mono text-xs leading-relaxed text-zinc-800">
-          <div className="space-y-3 font-sans">
-            <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider select-none border-b border-zinc-100 pb-1 flex justify-between items-center">
-              <span>{selectedPreviewItem.type.replace('_', ' ')} source stream</span>
-              <span className="text-zinc-300 font-mono normal-case text-[8px] font-medium">UTF-8 File Layout</span>
-            </div>
-            <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed bg-zinc-50/50 p-4 border border-zinc-100 rounded-md text-zinc-800 font-light max-h-[480px] overflow-y-auto">
-              {selectedPreviewItem.content}
-            </div>
-          </div>
+        <div className="flex-1 overflow-y-auto px-8 py-6 text-justify leading-relaxed markdown-body prose prose-sm prose-zinc max-w-none break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words">
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({node, ...props}) => <p className="mb-3 text-[13px]" {...props} />,
+              h1: ({node, ...props}) => <h1 className="text-lg font-bold my-3" {...props} />,
+              h2: ({node, ...props}) => <h2 className="text-base font-bold my-3" {...props} />,
+              h3: ({node, ...props}) => <h3 className="text-[14px] font-bold my-2" {...props} />,
+              ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-[13px]" {...props} />,
+              ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-[13px]" {...props} />,
+              li: ({node, ...props}) => <li className="ml-3" {...props} />,
+              hr: ({node, ...props}) => <hr className="my-4 border-zinc-200" {...props} />,
+              strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+              pre: ({node, ...props}) => <pre className="text-[10px] bg-zinc-50/50 border border-zinc-100 rounded p-4" {...props} />,
+              code: ({node, inline, ...props}: any) => inline 
+                ? <code className="text-[10px] bg-zinc-100 px-1 py-0.5 rounded text-indigo-600 font-mono" {...props} /> 
+                : <code className="text-[10px] font-mono" {...props} />,
+            }}
+          >
+            {fullContentToDisplay}
+          </ReactMarkdown>
         </div>
       </div>
     );
@@ -129,7 +173,7 @@ export default function MemoryPanel({
         </div>
 
         {selectedPreviewItem && (
-          <div className="w-[40%] bg-zinc-50 p-5 overflow-y-auto flex flex-col items-center shrink-0 border-l border-zinc-200 transition-all duration-300 animate-fade-in">
+          <div className="w-[40%] bg-white flex flex-col shrink-0 border-l border-zinc-200 transition-all duration-300 animate-fade-in relative overflow-hidden">
             {renderPreviewCanvasContent()}
           </div>
         )}

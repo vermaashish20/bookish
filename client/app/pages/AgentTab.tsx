@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BookProject, ChatMessage, ChapterItem } from '../types';
+import { BookProject, ChatMessage, ChapterItem, DecisionItem } from '../types';
 import ChatInterface from '../components/ChatInterface';
 import AgentFlowTrace from '../components/AgentFlowTrace';
 import PreviewCanvas from '../components/PreviewCanvas';
@@ -10,21 +10,30 @@ interface AgentTabProps {
   book: BookProject;
   chatMessages: ChatMessage[];
   isAgentThinking: boolean;
+  currentAgentStatus: string;
   promptInput: string;
   setPromptInput: (value: string) => void;
   onSendPrompt: (e: React.FormEvent) => void;
+  pendingConfirmation: { text: string, run_id: string } | null;
+  onResume: (decision: string) => void;
+  streamedDocumentText?: string;
 }
 
 export default function AgentTab({
   book,
   chatMessages,
   isAgentThinking,
+  currentAgentStatus,
   promptInput,
   setPromptInput,
-  onSendPrompt
+  onSendPrompt,
+  pendingConfirmation,
+  onResume,
+  streamedDocumentText
 }: AgentTabProps) {
   const [studioTab, setStudioTab] = useState<'Flow' | 'Preview'>('Flow');
   const [selectedPreviewPage, setSelectedPreviewPage] = useState(1);
+  const [activePreviewArtifact, setActivePreviewArtifact] = useState<DecisionItem | null>(null);
 
   // Auto-switch to Preview Canvas when generation starts or completes
   useEffect(() => {
@@ -42,9 +51,12 @@ export default function AgentTab({
       <ChatInterface
         chatMessages={chatMessages}
         isAgentThinking={isAgentThinking}
+        currentAgentStatus={currentAgentStatus}
         promptInput={promptInput}
         setPromptInput={setPromptInput}
         onSendPrompt={onSendPrompt}
+        pendingConfirmation={pendingConfirmation}
+        onResume={onResume}
       />
 
       {/* Right Column (60%) - Dynamic Studio Viewer (Flow & Preview tabs) */}
@@ -75,6 +87,12 @@ export default function AgentTab({
             <AgentFlowTrace
               decisionLog={book.memory.decisionLog}
               isAgentThinking={isAgentThinking}
+              currentAgentStatus={currentAgentStatus}
+              onPreviewArtifact={(artifact) => {
+                setActivePreviewArtifact(artifact);
+                setStudioTab('Preview');
+                setSelectedPreviewPage(1);
+              }}
             />
           )}
 
@@ -84,6 +102,8 @@ export default function AgentTab({
               selectedPage={selectedPreviewPage}
               setSelectedPage={setSelectedPreviewPage}
               bookTitle={book.title}
+              streamedDocumentText={streamedDocumentText}
+              activePreviewArtifact={activePreviewArtifact}
             />
           )}
         </div>

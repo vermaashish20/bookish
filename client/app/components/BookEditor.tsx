@@ -6,9 +6,10 @@ import { BookProject, ChapterItem, FactItem } from '../types';
 interface BookEditorProps {
   book: BookProject;
   activeSection: string;
+  streamedDocumentText?: string;
 }
 
-export default function BookEditor({ book, activeSection }: BookEditorProps) {
+export default function BookEditor({ book, activeSection, streamedDocumentText }: BookEditorProps) {
   return (
     <div className="flex-1 bg-zinc-100 p-8 overflow-y-auto flex flex-col items-center">
       <div className="flex flex-col items-center w-full">
@@ -83,10 +84,10 @@ export default function BookEditor({ book, activeSection }: BookEditorProps) {
                   <div key={ch.id} className="space-y-4">
                     <h2 className="text-center font-sans text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">Chapter {ch.number}</h2>
                     <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{ch.title}</h1>
-                    {ch.status === 'completed' ? (
+                    {ch.status === 'completed' || streamedDocumentText ? (
                       <div className="text-xs leading-relaxed space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                        <p className="indent-6 text-justify">{ch.content}</p>
-                        <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: {ch.status}</p>
+                        <p className="indent-6 text-justify whitespace-pre-wrap">{ch.status === 'completed' ? ch.content : streamedDocumentText}</p>
+                        {ch.status === 'completed' && <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: {ch.status}</p>}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center p-12 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">

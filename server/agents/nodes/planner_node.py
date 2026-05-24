@@ -5,7 +5,7 @@ Understands intent, reads memories, creates execution plans, assigns tasks
 from typing import Dict, Any
 from agents.orchestration_state import AgentOrchestrationState, PlannerOutput, TaskStatus
 from agents.utils import load_prompt, extract_json
-from services.llm_service import call_llm
+from services.llm_service import call_llm, stream_queue_var, stream_event_type_var
 from repository.projects import get_project
 from repository.project_memory import get_project_memories
 from repository.agent_runs import update_agent_run_planner_decision
@@ -28,6 +28,10 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     project_context = state["projectContext"]
     
     thinking = "[Planner] Analyzing user request...\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": "🧠 Planner is organizing the workflow..."})
     
     # Load project and memories
     project = get_project(project_id)
@@ -86,12 +90,25 @@ Analyze this request and create an execution plan. Return a JSON object with:
     thinking += "[Planner] Consulting LLM for execution plan...\n"
     
     # Get planner model settings
+    import os
     settings = project.get("settings", {})
     planner_model = settings.get("plannerModel", {})
     api_key = planner_model.get("apiKey", "")
-    provider = planner_model.get("provider", "Claude")
-    model_name = planner_model.get("modelName", "claude-3-5-sonnet")
+    provider = planner_model.get("provider", "NVIDIA")
+    model_name = planner_model.get("modelName", "mistralai/mistral-large-3-675b-instruct-2512")
     base_url = planner_model.get("endpointUrl", "")
+    
+    # Fallback to environment variables if not in project settings
+    if not api_key:
+        if provider.lower() == "nvidia":
+            api_key = os.getenv("NVIDIA_API_KEY", "")
+        elif provider.lower() in ("claude", "anthropic"):
+            api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        elif provider.lower() == "openai":
+            api_key = os.getenv("OPENAI_API_KEY", "")
+    
+    print(f"[DEBUG PLANNER] Provider: {provider}, Model: {model_name}")
+    print(f"[DEBUG PLANNER] API Key present: {bool(api_key)}")
     
     # Fallback plan
     fallback_json = json.dumps({
@@ -106,15 +123,19 @@ Analyze this request and create an execution plan. Return a JSON object with:
     })
     
     # Call LLM
-    response = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_planner_prompt,
-        default_fallback=fallback_json,
-        base_url=base_url
-    )
+    token = stream_event_type_var.set("hidden_stream")
+    try:
+        response = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_planner_prompt,
+            default_fallback=fallback_json,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     # Parse planner output
     try:
@@ -166,4 +187,34 @@ Analyze this request and create an execution plan. Return a JSON object with:
         planner_decision=dict(planner_output)
     )
     
+    # Pause for HITL confirmation
+    from agents.hitl_state import create_hitl_event, get_hitl_response
+    q = stream_queue_var.get()
+    if q:
+        # Show the plan before asking for confirmation
+        plan_text = f"**Planner Analysis:** {planner_output.get('userVisibleSummary', 'I have created an execution plan.')}\n\n**Proposed Tasks:**\n"
+        for idx, t in enumerate(planner_output.get('tasks', []), 1):
+            plan_text += f"{idx}. **{t['agent'].capitalize()}:** {t['task']}\n"
+            
+        q.put({
+            "event": "chat_message",
+            "text": plan_text
+        })
+        
+        q.put({
+            "event": "user_confirmation",
+            "text": "I have created an execution plan. Do you approve?",
+            "run_id": state["agentRunId"]
+        })
+    
+    thinking += "[Planner] Waiting for user confirmation...\n"
+    event = create_hitl_event(state["agentRunId"])
+    event.wait()
+    
+    response = get_hitl_response(state["agentRunId"])
+    thinking += f"[Planner] User responded: {response}\n"
+    
+    if str(response).lower() in ['no', 'reject', 'false']:
+        raise Exception("Run aborted by user.")
+        
     return state

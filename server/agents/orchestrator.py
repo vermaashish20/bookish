@@ -126,16 +126,20 @@ Provide a helpful, conversational response."""
     fallback_response = f"Hello! I'm here to help with your book project '{project.get('title', 'Untitled')}'. How can I assist you today?"
     
     # Call LLM with streaming support
-    from services.llm_service import call_llm
-    response = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=full_user_prompt,
-        default_fallback=fallback_response,
-        base_url=base_url
-    )
+    from services.llm_service import call_llm, stream_event_type_var
+    token = stream_event_type_var.set("chat_message")
+    try:
+        response = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=full_user_prompt,
+            default_fallback=fallback_response,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     print(f"[DEBUG ORCHESTRATOR] LLM response length: {len(response)}")
     

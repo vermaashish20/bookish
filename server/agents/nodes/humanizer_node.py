@@ -3,7 +3,7 @@ Humanizer Node - Naturalize drafts and style content according to tonality param
 """
 from agents.orchestration_state import AgentOrchestrationState
 from agents.utils import load_prompt
-from services.llm_service import call_llm
+from services.llm_service import call_llm, stream_queue_var, stream_event_type_var
 from repository.artifacts import create_artifact
 from repository.agent_runs import add_agent_execution, update_agent_execution
 from repository.projects import get_project
@@ -30,6 +30,10 @@ def humanizer_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         return state
         
     thinking = f"[Humanizer] Starting styling and humanization task: {current_task['task']}\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": "🎨 Humanizer is adjusting tonality..."})
     
     # Update task status
     state["tasks"][current_task_idx]["status"] = "running"
@@ -80,15 +84,19 @@ Target Tonality Preset: {project.get('tonality', 'Conversational')}
     fallback_text = source_text or f"[Humanized content for: {current_task['task']}]"
     
     # Call LLM
-    humanized_content = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        default_fallback=fallback_text,
-        base_url=base_url
-    )
+    token = stream_event_type_var.set("document_stream")
+    try:
+        humanized_content = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            default_fallback=fallback_text,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     thinking += f"[Humanizer] Humanization complete. Word count: {len(humanized_content.split())}\n"
     

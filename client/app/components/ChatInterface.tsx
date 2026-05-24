@@ -6,17 +6,23 @@ import { ChatMessage } from '../types';
 interface ChatInterfaceProps {
   chatMessages: ChatMessage[];
   isAgentThinking: boolean;
+  currentAgentStatus?: string;
   promptInput: string;
   setPromptInput: (value: string) => void;
   onSendPrompt: (e: React.FormEvent) => void;
+  pendingConfirmation?: { text: string, run_id: string } | null;
+  onResume?: (decision: string) => void;
 }
 
 export default function ChatInterface({
   chatMessages,
   isAgentThinking,
+  currentAgentStatus,
   promptInput,
   setPromptInput,
-  onSendPrompt
+  onSendPrompt,
+  pendingConfirmation,
+  onResume
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -73,17 +79,13 @@ export default function ChatInterface({
           );
         })}
 
-        {/* Agent thinking bubbles */}
+        {/* Agent thinking status */}
         {isAgentThinking && (
           <div className="flex gap-2.5 max-w-[85%]">
-            <div className="w-6 h-6 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200 flex items-center justify-center text-[9px] font-bold animate-pulse">
-              G
-            </div>
             <div className="space-y-1 flex-1">
-              <div className="text-[9px] text-zinc-400 font-medium">Orchestration Graph processing...</div>
-              <div className="bg-zinc-50 border border-zinc-100 text-xs px-3 py-2.5 rounded-lg rounded-tl-none text-zinc-400 italic flex items-center gap-2">
+              <div className="bg-zinc-50 border border-zinc-100 text-xs px-3 py-2.5 rounded-lg text-zinc-400 italic flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-ping shrink-0" />
-                Running the orchestration graph for this request.
+                {currentAgentStatus || "Running the orchestration graph for this request."}
               </div>
             </div>
           </div>
@@ -93,23 +95,43 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Unified Prompt Entry Input Bar */}
-      <form onSubmit={onSendPrompt} className="p-4 border-t border-zinc-100 flex gap-2 items-center bg-zinc-50">
-        <input
-          type="text"
-          value={promptInput}
-          onChange={(e) => setPromptInput(e.target.value)}
-          placeholder="Ask the agent to plan, draft, revise, or repair outlines..."
-          className="flex-1 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none shadow-xs"
-        />
-        <button
-          type="submit"
-          disabled={isAgentThinking || !promptInput.trim()}
-          className="rounded-md bg-zinc-950 px-3.5 py-2 text-xs font-semibold text-white hover:bg-zinc-800 transition disabled:opacity-50 shadow-xs cursor-pointer shrink-0"
-        >
-          Send
-        </button>
-      </form>
+      {/* Unified Prompt Entry Input Bar or HITL Confirmation */}
+      {pendingConfirmation ? (
+        <div className="p-5 border-t border-zinc-100 bg-orange-50 flex flex-col items-center shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
+          <p className="text-sm font-semibold text-orange-900 mb-4 text-center">{pendingConfirmation.text}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => onResume && onResume('yes')}
+              className="rounded-md bg-emerald-600 px-6 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 transition shadow-sm cursor-pointer"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => onResume && onResume('no')}
+              className="rounded-md bg-zinc-100 border border-zinc-300 px-6 py-2.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 transition shadow-sm cursor-pointer"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={onSendPrompt} className="p-4 border-t border-zinc-100 flex gap-2 items-center bg-zinc-50">
+          <input
+            type="text"
+            value={promptInput}
+            onChange={(e) => setPromptInput(e.target.value)}
+            placeholder="Ask the agent to plan, draft, revise, or repair outlines..."
+            className="flex-1 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none shadow-xs"
+          />
+          <button
+            type="submit"
+            disabled={isAgentThinking || !promptInput.trim()}
+            className="rounded-md bg-zinc-950 px-3.5 py-2 text-xs font-semibold text-white hover:bg-zinc-800 transition disabled:opacity-50 shadow-xs cursor-pointer shrink-0"
+          >
+            Send
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ from agents.orchestration_state import AgentOrchestrationState
 from repository.artifacts import create_artifact
 from repository.agent_runs import add_agent_execution, update_agent_execution
 from db.chroma import query_vector_assets, add_vector_asset
+from services.llm_service import stream_queue_var
 from datetime import datetime
 
 
@@ -26,6 +27,10 @@ def researcher_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         return state
     
     thinking = f"[Researcher] Starting research task: {current_task['task']}\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": "🔍 Researcher is gathering context..."})
     
     # Update task status
     state["tasks"][current_task_idx]["status"] = "running"

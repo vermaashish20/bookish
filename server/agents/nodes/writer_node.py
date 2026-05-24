@@ -3,7 +3,7 @@ Writer Node - Create new book content
 """
 from agents.orchestration_state import AgentOrchestrationState
 from agents.utils import load_prompt
-from services.llm_service import call_llm
+from services.llm_service import call_llm, stream_queue_var, stream_event_type_var
 from repository.artifacts import create_artifact
 from repository.agent_runs import add_agent_execution, update_agent_execution
 from repository.projects import get_project
@@ -31,6 +31,10 @@ def writer_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         return state
     
     thinking = f"[Writer] Starting writing task: {current_task['task']}\n"
+    
+    q = stream_queue_var.get()
+    if q:
+        q.put({"event": "agent_status", "text": f"✍️ Writer is generating content..."})
     
     # Update task status
     state["tasks"][current_task_idx]["status"] = "running"
@@ -94,15 +98,19 @@ Target: 500-1000 words.
     fallback_content = f"[Draft content for: {current_task['task']}]\n\nThis is a placeholder draft. Please configure your Writer model API key to generate actual content."
     
     # Call LLM
-    draft_content = call_llm(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_writer_prompt,
-        default_fallback=fallback_content,
-        base_url=base_url
-    )
+    token = stream_event_type_var.set("document_stream")
+    try:
+        draft_content = call_llm(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_writer_prompt,
+            default_fallback=fallback_content,
+            base_url=base_url
+        )
+    finally:
+        stream_event_type_var.reset(token)
     
     thinking += f"[Writer] Generated {len(draft_content.split())} words\n"
     
@@ -137,6 +145,31 @@ Target: 500-1000 words.
     )
     
     thinking += f"[Writer] Draft created (artifact: {artifact_id})\n"
+    
+    # Save draft as chapter in MongoDB with status="draft"
+    from repository.chapters import add_chapter, get_project_chapters
+    existing_chapters = get_project_chapters(project_id)
+    next_number = len(existing_chapters) + 1
+    
+    # Extract title from first line or use default
+    title = f"Chapter {next_number}"
+    first_line = draft_content.split('\n')[0].strip()
+    if first_line.startswith('**Chapter') or first_line.startswith('Chapter') or first_line.startswith('#'):
+        title = first_line.replace('*', '').replace('#', '').strip()
+    
+    chapter_id = add_chapter(
+        project_id=project_id,
+        number=next_number,
+        title=title,
+        content=draft_content,
+        word_count=word_count,
+        status="draft"
+    )
+    
+    thinking += f"[Writer] Draft saved as Chapter {next_number} (status: draft, id: {chapter_id})\n"
+    
+    # Store chapter_id in task metadata for editor to reference
+    state["tasks"][current_task_idx]["chapterId"] = chapter_id
     
     # Update state
     state["draftContent"] = draft_content

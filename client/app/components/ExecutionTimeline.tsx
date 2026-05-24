@@ -33,7 +33,8 @@ export default function ExecutionTimeline({ decisionLog, selectedPreviewItem, se
                   id: logId,
                   title: `Timeline Log: ${log.step}`,
                   subtitle: `${log.agent} Node Action`,
-                  content: `AGENT NODE:\n${log.agent}\n\nSTEP ACTION:\n${log.action}\n\nTIME RESOLVED:\n${new Date(log.timestamp).toLocaleString()}\n\nSUMMARY:\n${log.resolution}`
+                  content: `**AGENT NODE:**\n${log.agent}\n\n**STEP ACTION:**\n${log.action}\n\n**TIME RESOLVED:**\n${new Date(log.timestamp).toLocaleString()}\n\n**SUMMARY:**\n${log.resolution}`,
+                  artifactContent: log.artifactContent
                 })}
                 className={`w-full text-left p-3 rounded-lg border text-xs relative transition shadow-xxs cursor-pointer block ${
                   isActive
@@ -45,13 +46,13 @@ export default function ExecutionTimeline({ decisionLog, selectedPreviewItem, se
                   isActive ? 'border-zinc-950 bg-zinc-950' : 'border-zinc-300 bg-white'
                 }`} />
                 
-                <div className="flex items-center justify-between text-[8px] opacity-60 mb-1 font-mono uppercase tracking-wider font-semibold">
+                <div className="flex items-center justify-between text-[9px] opacity-70 mb-1 font-mono uppercase tracking-wider font-semibold">
                   <span>{log.agent} Node</span>
                   <span>{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 
-                <h4 className="font-bold text-[11px] truncate">{log.step}</h4>
-                <p className="line-clamp-1 text-[10px] opacity-75 italic mt-0.5">"{log.action}"</p>
+                <h4 className="font-bold text-xs truncate">{log.step}</h4>
+                <p className="line-clamp-1 text-[11px] opacity-75 italic mt-0.5">"{log.action}"</p>
               </button>
             );
           })
