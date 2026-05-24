@@ -199,6 +199,122 @@ export const submitMessage = (id: string, message: string) =>
   });
 
 /**
+ * POST /api/projects/:id/message (Streaming version)
+ * Send agent message and call onChunk callback on incoming events in real-time.
+ */
+export const submitMessageStream = async (
+  id: string,
+  message: string,
+  onChunk: (data: {
+    event: string;
+    text?: string;
+    thinking?: string;
+    projectState?: any;
+    reply?: string;
+    cost?: number;
+    tokens?: number;
+    error?: string;
+  }) => void
+): Promise<void> => {
+  console.log('='.repeat(80));
+  console.log('[DEBUG STREAM] Starting submitMessageStream');
+  console.log('[DEBUG STREAM] Project ID:', id);
+  console.log('[DEBUG STREAM] Message:', message);
+  console.log('[DEBUG STREAM] API URL:', `${BASE_URL}${API_ENDPOINTS.projects.messages.submit(id)}`);
+  
+  const response = await fetch(`${BASE_URL}${API_ENDPOINTS.projects.messages.submit(id)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message }),
+  });
+
+  console.log('[DEBUG STREAM] Response status:', response.status);
+  console.log('[DEBUG STREAM] Response headers:', Object.fromEntries(response.headers.entries()));
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    console.error('[DEBUG STREAM] ❌ Request failed:', error);
+    throw new Error((error as { detail?: string }).detail ?? `Request failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    console.error('[DEBUG STREAM] ❌ No reader available');
+    return;
+  }
+
+  console.log('[DEBUG STREAM] ✅ Reader obtained, starting to read stream...');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let chunkCount = 0;
+  let tokenCount = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    
+    if (done) {
+      console.log('[DEBUG STREAM] ✅ Stream complete');
+      console.log('[DEBUG STREAM] Total chunks received:', chunkCount);
+      console.log('[DEBUG STREAM] Total tokens received:', tokenCount);
+      break;
+    }
+
+    chunkCount++;
+    buffer += decoder.decode(value, { stream: true });
+    
+    if (chunkCount % 10 === 0) {
+      console.log(`[DEBUG STREAM] Chunk #${chunkCount}, buffer size: ${buffer.length} bytes`);
+    }
+    
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      
+      if (trimmed.startsWith('data: ')) {
+        const dataStr = trimmed.slice(6);
+        try {
+          const parsed = JSON.parse(dataStr);
+          
+          if (parsed.event === 'token') {
+            tokenCount++;
+            if (tokenCount % 10 === 0) {
+              console.log(`[DEBUG STREAM] ✅ Token #${tokenCount}:`, parsed.text?.substring(0, 30));
+            }
+          } else {
+            console.log('[DEBUG STREAM] Event received:', parsed.event);
+          }
+          
+          onChunk(parsed);
+        } catch (e) {
+          console.warn('[DEBUG STREAM] ⚠️ Failed to parse SSE line:', trimmed, e);
+        }
+      }
+    }
+  }
+
+  // Flush remaining buffer
+  buffer += decoder.decode(new Uint8Array(), { stream: false });
+  const trimmed = buffer.trim();
+  if (trimmed.startsWith('data: ')) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(6));
+      console.log('[DEBUG STREAM] Final event from buffer:', parsed.event);
+      onChunk(parsed);
+    } catch (e) {
+      console.warn('[DEBUG STREAM] ⚠️ Failed to parse final buffer:', e);
+    }
+  }
+  
+  console.log('='.repeat(80));
+};
+
+/**
  * GET /api/projects/:id/messages
  * Fetch chat message history for the project
  * @param id - Project ID

@@ -34,9 +34,11 @@ def classify_request(user_prompt: str) -> str:
     
     # Check if any agent keyword is present
     if any(keyword in prompt_lower for keyword in agent_keywords):
+        print(f"[DEBUG ORCHESTRATOR] Classified as 'agent_task' (keyword match)")
         return "agent_task"
     
     # Default to general chat for questions and simple queries
+    print(f"[DEBUG ORCHESTRATOR] Classified as 'general_chat' (default)")
     return "general_chat"
 
 
@@ -60,11 +62,13 @@ def load_project_context(project_id: str) -> ProjectContext:
 
 def handle_general_chat(state: AgentOrchestrationState) -> AgentOrchestrationState:
     """
-    Handle general chat queries directly without agents
-    Retrieve project data and answer questions
+    Handle general chat queries using LLM with streaming support
     """
     project_id = state["projectId"]
     user_prompt = state["userPrompt"]
+    
+    print(f"[DEBUG ORCHESTRATOR] handle_general_chat called")
+    print(f"[DEBUG ORCHESTRATOR] User prompt: {user_prompt}")
     
     # Query ChromaDB for relevant context
     semantic_results = query_vector_assets(
@@ -85,37 +89,55 @@ def handle_general_chat(state: AgentOrchestrationState) -> AgentOrchestrationSta
     characters = get_project_characters(project_id)
     chapters = get_project_chapters(project_id)
     
-    # Simple response generation based on query type
-    prompt_lower = user_prompt.lower()
+    # Build context for LLM
+    project_context = f"""
+Project: {project.get('title', 'Untitled')}
+Genre: {project.get('genre', 'General')}
+Characters: {len(characters)}
+Chapters: {len(chapters)}
+"""
     
-    if "title" in prompt_lower:
-        response = f"The book title is '{project.get('title', 'Untitled')}'."
-    elif "character" in prompt_lower:
-        if characters:
-            char_list = ", ".join([c["name"] for c in characters[:5]])
-            response = f"The project has {len(characters)} character(s): {char_list}."
-        else:
-            response = "No characters have been created yet."
-    elif "chapter" in prompt_lower:
-        if chapters:
-            response = f"The project has {len(chapters)} chapter(s). "
-            if len(chapters) <= 5:
-                chapter_list = ", ".join([f"Ch{c['number']}: {c['title']}" for c in chapters])
-                response += f"Chapters: {chapter_list}."
-        else:
-            response = "No chapters have been created yet."
-    elif "outline" in prompt_lower or "summary" in prompt_lower:
-        if chapters:
-            outline = "\n".join([f"Chapter {c['number']}: {c['title']}" for c in chapters[:10]])
-            response = f"Current outline:\n{outline}"
-        else:
-            response = "No outline has been created yet."
-    else:
-        # Generic response with context
-        if context_snippets:
-            response = f"Based on the project context:\n\n" + "\n".join(context_snippets[:2])
-        else:
-            response = "I can help you with questions about your project. Try asking about the title, characters, chapters, or outline."
+    if context_snippets:
+        project_context += f"\n\nRelevant Context:\n" + "\n".join(context_snippets[:2])
+    
+    # Build system prompt
+    system_prompt = """You are a helpful AI assistant for a book writing project. 
+Answer questions about the project, provide guidance, and engage in friendly conversation.
+Keep responses concise and helpful."""
+    
+    # Build user prompt with context
+    full_user_prompt = f"""{project_context}
+
+User Question: {user_prompt}
+
+Provide a helpful, conversational response."""
+    
+    print(f"[DEBUG ORCHESTRATOR] Calling LLM for general chat response...")
+    
+    # Get model settings
+    settings = project.get("settings", {})
+    planner_model = settings.get("plannerModel", {})
+    api_key = planner_model.get("apiKey", "")
+    provider = planner_model.get("provider", "Claude")
+    model_name = planner_model.get("modelName", "claude-3-5-sonnet")
+    base_url = planner_model.get("endpointUrl", "")
+    
+    # Fallback response
+    fallback_response = f"Hello! I'm here to help with your book project '{project.get('title', 'Untitled')}'. How can I assist you today?"
+    
+    # Call LLM with streaming support
+    from services.llm_service import call_llm
+    response = call_llm(
+        provider=provider,
+        model_name=model_name,
+        api_key=api_key,
+        system_prompt=system_prompt,
+        user_prompt=full_user_prompt,
+        default_fallback=fallback_response,
+        base_url=base_url
+    )
+    
+    print(f"[DEBUG ORCHESTRATOR] LLM response length: {len(response)}")
     
     # Update state
     state["finalResponse"] = response
@@ -125,7 +147,8 @@ def handle_general_chat(state: AgentOrchestrationState) -> AgentOrchestrationSta
     # Add thinking log
     state["thinking_logs"].append(
         f"[Orchestrator] Classified as general_chat\n"
-        f"[Orchestrator] Retrieved project context and answered directly"
+        f"[Orchestrator] Called LLM for conversational response\n"
+        f"[Orchestrator] Response generated: {len(response)} characters"
     )
     
     return state
