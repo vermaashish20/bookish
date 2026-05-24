@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+
+# Chroma vector store (local persistence)
+chroma_db/*
+chroma.sqlite3
+langgraph_checkpoints.sqlite
+langgraph_checkpoints.sqlite-*
+
+*.langgraph_*

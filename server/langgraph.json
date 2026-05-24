@@ -1,0 +1,14 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "bookish": "./app/agent/agent.py:graph"
+  },
+  "env": ".env",
+  "checkpointer": {
+    "serde": {
+      "allowed_json_modules": [
+        ["app", "agent", "utils", "state"]
+      ]
+    }
+  }
+}
