@@ -4,31 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BookProject, ChatMessage, ChapterItem, Asset, FactItem, CharacterBibleItem, CallbackItem, DecisionItem, ProjectSettings } from '../../types';
-
-// Standard mock responses for agents based on prompts
-const MOCK_AGENT_REPLIES = {
-  plan: {
-    text: "I have analyzed your initial brief and assets. I've successfully generated the 10-chapter structured outline for 'The Intelligent Pocket'. Registered compound interest facts in the Fact Registry, mapped Sarah's notebook as a primary callback index setup in Chapter 1, and tuned the conversational style metrics in the Tonality Fingerprint.",
-    agent: "Planner" as const,
-    thinking: "[Planner] Parsing brief target: Gen-Z budgeters.\n[Planner] Constructing 10 chapter nodes...\n[Planner] Formatting front matter outline (TOC, Preface, Dedication).\n[Planner] Checking logical sequence flow: Budgeting -> Emergency -> Debt -> Compounding -> Passive Investing.\n[Planner] Saving outline models into system graph state.",
-    cost: 0.045,
-    tokens: 4500
-  },
-  research: {
-    text: "Semantic research complete. Retrieved 5 high-density context documents regarding passive index investing vs active trading. Verified S&P 500 yields (approx. 9.8% annual compound rate). Registered verified sources into the Fact Registry.",
-    agent: "Researcher" as const,
-    thinking: "[Researcher] Quering Vector Store with hybrid dense/sparse search: 'Low-cost index funds historical returns'\n[Researcher] Retrieved 8 chunks from Malkiel (2020) and Bogle (2018).\n[Researcher] Applying BM25 exact match weights for 'ETF' and 'S&P 500'.\n[Researcher] Passing top-5 scored context blocks to orchestrator state.",
-    cost: 0.012,
-    tokens: 1200
-  },
-  write: {
-    text: "Draft complete for Chapter 5: 'The Lazy Investor: Low-Cost Index Funds'. Initial output registered ~2,400 words. Fact-checker successfully verified all historical S&P yields. Humanizer applied the 'Conversational' preset rules, eliminating AI-tells (such as 'delve' and 'it's important to note') and varying sentence structures.",
-    agent: "Writer" as const,
-    thinking: "[Writer] Initiating generation module using Claude 3.5 Sonnet.\n[Writer] Inputs: Chapter outline focus areas + RAG context.\n[Writer] Drafted 2,420 words of conversational non-fiction narrative.\n[Fact-Checker] Auditing drafted text...\n[Fact-Checker] Verified: Malkiel index fund performance assertion matches source document.\n[Humanizer] Flagged: 3 occurrences of 'delve into' and 2 instances of mechanical triads.\n[Humanizer] Replacing and varying sentence length to target standard average of 14.5 tokens.\n[Assembler] Compiling chapter output to document store.",
-    cost: 0.098,
-    tokens: 8200
-  }
-};
+import { submitPrompt as apiSubmitPrompt, saveSettings as apiSaveSettings, uploadAsset as apiUploadAsset, uploadAssetFile as apiUploadAssetFile, fetchProject as apiFetchProject, fetchSettings as apiFetchSettings, SettingsPayload } from '../../lib/api';
 
 export default function BookWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -53,6 +29,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
   } | null>(null);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [newAssetContent, setNewAssetContent] = useState('');
+  const [selectedAssetFile, setSelectedAssetFile] = useState<File | null>(null);
 
   // Input states
   const [promptInput, setPromptInput] = useState('');
@@ -60,63 +37,82 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [activeBookSection, setActiveBookSection] = useState<string>('ch1');
   const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetType, setNewAssetType] = useState('PDF Reference');
+  const [newAssetType, setNewAssetType] = useState('Markdown File');
 
   // Project settings states
-  const [plannerProvider, setPlannerProvider] = useState<'Ollama' | 'Gemini' | 'Claude' | 'OpenAI'>('Claude');
+  type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
+  const [plannerProvider, setPlannerProvider] = useState<ProviderType>('Claude');
   const [plannerModel, setPlannerModel] = useState('claude-3-5-sonnet');
-  const [writerProvider, setWriterProvider] = useState<'Ollama' | 'Gemini' | 'Claude' | 'OpenAI'>('Claude');
+  const [writerProvider, setWriterProvider] = useState<ProviderType>('Claude');
   const [writerModel, setWriterModel] = useState('claude-3-5-sonnet');
-  const [checkerProvider, setCheckerProvider] = useState<'Ollama' | 'Gemini' | 'Claude' | 'OpenAI'>('OpenAI');
+  const [checkerProvider, setCheckerProvider] = useState<ProviderType>('OpenAI');
   const [checkerModel, setCheckerModel] = useState('gpt-4o-mini');
   const [anthropicKey, setAnthropicKey] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
+  const [nvidiaKey, setNvidiaKey] = useState('');
   const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
+  const [customEndpoint, setCustomEndpoint] = useState('');
+  const [customApiKey, setCustomApiKey] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Load book details from localStorage
+  // Load book details from backend
   useEffect(() => {
-    const saved = localStorage.getItem('aiuthor_projects');
-    if (saved) {
-      try {
-        const list: BookProject[] = JSON.parse(saved);
-        setBooksList(list);
-        const active = list.find(b => b.id === bookId);
+    apiFetchProject(bookId)
+      .then((active: any) => {
         if (active) {
-          setBook(active);
+          setBook(active as BookProject);
           
           // Re-load settings states
           if (active.settings) {
-            setPlannerProvider(active.settings.plannerModel.provider);
-            setPlannerModel(active.settings.plannerModel.modelName);
-            setWriterProvider(active.settings.writerModel.provider);
-            setWriterModel(active.settings.writerModel.modelName);
-            setCheckerProvider(active.settings.factCheckerModel.provider);
-            setCheckerModel(active.settings.factCheckerModel.modelName);
-            setAnthropicKey(active.settings.plannerModel.apiKey || '');
-            setGeminiKey(active.settings.writerModel.apiKey || '');
-            setOllamaEndpoint(active.settings.plannerModel.endpointUrl || 'http://localhost:11434');
+            setPlannerProvider(active.settings.plannerModel?.provider || 'Claude');
+            setPlannerModel(active.settings.plannerModel?.modelName || 'claude-3-5-sonnet');
+            setWriterProvider(active.settings.writerModel?.provider || 'Claude');
+            setWriterModel(active.settings.writerModel?.modelName || 'claude-3-5-sonnet');
+            setCheckerProvider(active.settings.factCheckerModel?.provider || 'OpenAI');
+            setCheckerModel(active.settings.factCheckerModel?.modelName || 'gpt-4o-mini');
+            
+            // Map keys
+            const allModels = [
+              active.settings.plannerModel,
+              active.settings.writerModel,
+              active.settings.factCheckerModel,
+              active.settings.humanizerModel
+            ].filter(Boolean);
+
+            const claudeConf = allModels.find(m => m.provider === 'Claude');
+            if (claudeConf?.apiKey) setAnthropicKey(claudeConf.apiKey);
+
+            const geminiConf = allModels.find(m => m.provider === 'Gemini');
+            if (geminiConf?.apiKey) setGeminiKey(geminiConf.apiKey);
+
+            const openaiConf = allModels.find(m => m.provider === 'OpenAI');
+            if (openaiConf?.apiKey) setOpenaiKey(openaiConf.apiKey);
+
+            const nvidiaConf = allModels.find(m => m.provider === 'Nvidia');
+            if (nvidiaConf?.apiKey) setNvidiaKey(nvidiaConf.apiKey);
+
+            const customConf = allModels.find(m => m.provider === 'Custom');
+            if (customConf) {
+              if (customConf.apiKey) setCustomApiKey(customConf.apiKey);
+              if (customConf.endpointUrl) setCustomEndpoint(customConf.endpointUrl);
+            }
+
+            const ollamaConf = allModels.find(m => m.provider === 'Ollama');
+            if (ollamaConf?.endpointUrl) setOllamaEndpoint(ollamaConf.endpointUrl);
           }
 
-          // Set initial chat messages
-          const initialMsgs: ChatMessage[] = [
-            {
-              id: 'init-1',
-              sender: 'System',
-              text: `Welcome to the '${active.title}' workspace. All orchestration models are initialized. Click Settings to modify LLM nodes.`,
-              timestamp: new Date(new Date(active.createdAt).getTime() + 1000).toISOString()
-            }
-          ];
+          const initialMsgs: ChatMessage[] = [];
 
           // Reconstruct agent thinking logs if decision log is present
-          if (active.memory.decisionLog.length > 0) {
-            active.memory.decisionLog.forEach((log, idx) => {
+          if (active.memory?.decisionLog?.length > 0) {
+            active.memory.decisionLog.forEach((log: any, idx: number) => {
               initialMsgs.push({
                 id: `init-log-${idx}`,
                 sender: log.agent as ChatMessage['sender'],
                 text: `${log.action} - ${log.resolution}`,
-                timestamp: log.timestamp,
-                thinking: `[${log.agent}] Executing ${log.step}...\n[${log.agent}] Resolution details: ${log.resolution}`
+                timestamp: log.timestamp
               });
             });
           }
@@ -125,12 +121,11 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
         } else {
           router.push('/');
         }
-      } catch (e) {
+      })
+      .catch((err) => {
+        console.error("Failed to load project details", err);
         router.push('/');
-      }
-    } else {
-      router.push('/');
-    }
+      });
   }, [bookId, router]);
 
   // Reset preview item selection when switching tabs to prevent stale data display
@@ -138,32 +133,101 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
     setSelectedPreviewItem(null);
   }, [activeTab, memorySubTab]);
 
-  // Save book changes back to localStorage
+  // Synchronize and refresh settings from backend settings GET endpoint when tab becomes active
+  useEffect(() => {
+    if (activeTab === 'Settings' && bookId) {
+      apiFetchSettings(bookId)
+        .then((settings: any) => {
+          if (settings) {
+            setPlannerProvider(settings.plannerModel?.provider || 'Claude');
+            setPlannerModel(settings.plannerModel?.modelName || 'claude-3-5-sonnet');
+            setWriterProvider(settings.writerModel?.provider || 'Claude');
+            setWriterModel(settings.writerModel?.modelName || 'claude-3-5-sonnet');
+            setCheckerProvider(settings.factCheckerModel?.provider || 'OpenAI');
+            setCheckerModel(settings.factCheckerModel?.modelName || 'gpt-4o-mini');
+
+            const allModels = [
+              settings.plannerModel,
+              settings.writerModel,
+              settings.factCheckerModel,
+              settings.humanizerModel
+            ].filter(Boolean);
+
+            const claudeConf = allModels.find(m => m.provider === 'Claude');
+            if (claudeConf?.apiKey) setAnthropicKey(claudeConf.apiKey);
+
+            const geminiConf = allModels.find(m => m.provider === 'Gemini');
+            if (geminiConf?.apiKey) setGeminiKey(geminiConf.apiKey);
+
+            const openaiConf = allModels.find(m => m.provider === 'OpenAI');
+            if (openaiConf?.apiKey) setOpenaiKey(openaiConf.apiKey);
+
+            const nvidiaConf = allModels.find(m => m.provider === 'Nvidia');
+            if (nvidiaConf?.apiKey) setNvidiaKey(nvidiaConf.apiKey);
+
+            const customConf = allModels.find(m => m.provider === 'Custom');
+            if (customConf) {
+              if (customConf.apiKey) setCustomApiKey(customConf.apiKey);
+              if (customConf.endpointUrl) setCustomEndpoint(customConf.endpointUrl);
+            }
+
+            const ollamaConf = allModels.find(m => m.provider === 'Ollama');
+            if (ollamaConf?.endpointUrl) setOllamaEndpoint(ollamaConf.endpointUrl);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch fresh settings from backend settings GET endpoint", err);
+        });
+    }
+  }, [activeTab, bookId]);
+
+  // Save book changes locally (API changes are processed dynamically through submits)
   const updateBookProject = (updatedBook: BookProject) => {
     setBook(updatedBook);
-    const updatedList = booksList.map(b => b.id === updatedBook.id ? updatedBook : b);
-    setBooksList(updatedList);
-    localStorage.setItem('aiuthor_projects', JSON.stringify(updatedList));
   };
 
-  // Save Settings configuration
-  const handleSaveSettings = () => {
+  // Save Settings configuration - persists locally and pushes to backend
+  const handleSaveSettings = async () => {
     if (!book) return;
+    setIsSavingSettings(true);
+    setSettingsSaved(false);
+
+    // Resolve the correct API key per provider
+    const resolveKey = (provider: string) => {
+      switch (provider) {
+        case 'Claude': return anthropicKey;
+        case 'Gemini': return geminiKey;
+        case 'OpenAI': return openaiKey;
+        case 'Nvidia': return nvidiaKey;
+        case 'Ollama': return ollamaEndpoint;
+        case 'Custom': return customApiKey;
+        default: return '';
+      }
+    };
+    const resolveEndpoint = (provider: string) => {
+      if (provider === 'Ollama') return ollamaEndpoint;
+      if (provider === 'Custom') return customEndpoint;
+      return '';
+    };
 
     const newSettings: ProjectSettings = {
-      plannerModel: { provider: plannerProvider, modelName: plannerModel, apiKey: anthropicKey, endpointUrl: ollamaEndpoint },
-      writerModel: { provider: writerProvider, modelName: writerModel, apiKey: geminiKey, endpointUrl: ollamaEndpoint },
-      factCheckerModel: { provider: checkerProvider, modelName: checkerModel, apiKey: openaiKey, endpointUrl: ollamaEndpoint },
-      humanizerModel: { provider: writerProvider, modelName: writerModel, apiKey: geminiKey, endpointUrl: ollamaEndpoint }
+      plannerModel: { provider: plannerProvider, modelName: plannerModel, apiKey: resolveKey(plannerProvider), endpointUrl: resolveEndpoint(plannerProvider) },
+      writerModel:  { provider: writerProvider,  modelName: writerModel,  apiKey: resolveKey(writerProvider),  endpointUrl: resolveEndpoint(writerProvider)  },
+      factCheckerModel: { provider: checkerProvider, modelName: checkerModel, apiKey: resolveKey(checkerProvider), endpointUrl: resolveEndpoint(checkerProvider) },
+      humanizerModel: { provider: writerProvider, modelName: writerModel, apiKey: resolveKey(writerProvider), endpointUrl: resolveEndpoint(writerProvider) }
     };
 
-    const updatedBook: BookProject = {
-      ...book,
-      settings: newSettings
-    };
-
+    const updatedBook: BookProject = { ...book, settings: newSettings };
     updateBookProject(updatedBook);
-    alert("Workspace model configurations saved successfully!");
+
+    try {
+      await apiSaveSettings(book.id, newSettings as unknown as SettingsPayload);
+    } catch (err) {
+      console.warn('[Settings] Backend unreachable, saved locally only.', err);
+    }
+    setIsSavingSettings(false);
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 3000);
   };
 
   if (!book) {
@@ -174,8 +238,8 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
     );
   }
 
-  // Handle Prompt Submission in Split Studio Chat
-  const handleSendPrompt = (e: React.FormEvent) => {
+  // Handle Prompt Submission - hits real backend
+  const handleSendPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!promptInput.trim()) return;
 
@@ -186,177 +250,92 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
       timestamp: new Date().toISOString()
     };
 
+    const capturedInput = promptInput;
     const updatedMessages = [...chatMessages, userMsg];
     setChatMessages(updatedMessages);
     setPromptInput('');
     setIsAgentThinking(true);
-    setStudioTab('Flow'); // auto focus the graph execution trace panel!
+    setStudioTab('Flow');
 
-    // Simulate Agent DAG logic
-    setTimeout(() => {
-      let replyData: {
-        text: string;
-        agent: ChatMessage['sender'];
-        thinking: string;
-        cost: number;
-        tokens: number;
-      } = MOCK_AGENT_REPLIES.write; 
-      const textLower = userMsg.text.toLowerCase();
+    try {
+      const result = await apiSubmitPrompt(book.id, capturedInput);
 
-      if (textLower.includes('plan') || textLower.includes('outline')) {
-        replyData = MOCK_AGENT_REPLIES.plan;
-      } else if (textLower.includes('research') || textLower.includes('rag') || textLower.includes('source')) {
-        replyData = MOCK_AGENT_REPLIES.research;
-      } else if (textLower.includes('write') || textLower.includes('draft') || textLower.includes('chapter')) {
-        replyData = MOCK_AGENT_REPLIES.write;
-      }
-
-      // If drafting chapter 5
-      if (textLower.includes('chapter 5') || textLower.includes('draft chapter 5') || textLower.includes('index funds')) {
-        const updatedChapters = book.chapters.map((c: ChapterItem) => {
-          if (c.number === 5) {
-            return {
-              ...c,
-              status: 'completed' as const,
-              wordCount: 2420,
-              content: "Index funds represent the ultimate triumph of elegant simplicity over hyper-active complexity. In this chapter, we outline why index fund investing is mathematically superior for 99% of people. By purchasing an S&P 500 fund, you instantly buy a small slice of America's 500 largest corporate balance sheets. Instead of trying to find the needle in the haystack, we follow Jack Bogle's advice: buy the whole haystack. Historically, this lazy approach compound-yields roughly 9.8% annually, beating active hedge fund managers who charge high expense ratios just to underperform the broader market..."
-            };
-          }
-          return c;
-        });
-
-        const newFact: FactItem = {
-          id: `f-${Date.now()}`,
-          assertion: "John C. Bogle founded Vanguard in 1975, launching the first retail low-cost index mutual fund tracking the S&P 500 index.",
-          source: "Bogle, J. C. (2017). The Little Book of Common Sense Investing.",
-          verifiedBy: "Fact-Checker-Agent",
-          timestamp: new Date().toISOString()
-        };
-
-        const newDecision = {
-          timestamp: new Date().toISOString(),
-          step: "Chapter 5 Generation",
-          agent: "Writer",
-          action: "Drafted low-cost index investing chapter under Conversational rules.",
-          resolution: "Chapter marked as completed; S&P 500 yield historical statistics registered in Fact database."
-        };
-
-        const updatedBook: BookProject = {
-          ...book,
-          status: 'Reviewing',
-          chapters: updatedChapters,
-          memory: {
-            ...book.memory,
-            factRegistry: [...book.memory.factRegistry, newFact],
-            decisionLog: [...book.memory.decisionLog, newDecision]
-          }
-        };
-
-        updateBookProject(updatedBook);
-        setStudioTab('Preview'); // auto-focus the preview tab to see the drafted A4 TipTap page!
-      }
-
-      // If outline self-healing (Test case D)
-      if (textLower.includes('insert') || textLower.includes('new chapter') || textLower.includes('self-heal')) {
-        const currentChapters = [...book.chapters];
-        const newChapter: ChapterItem = {
-          id: `ch-inserted-${Date.now()}`,
-          number: 5,
-          title: "Chapter 5: The Psychological Ledger",
-          content: "Why do we panic sell? In this newly inserted chapter, we examine the behavioral finance errors that sabotage most index investment plans. We explore loss aversion bias and detail self-healing structures to keep your asset allocation bulletproof.",
-          wordCount: 1520,
-          status: 'completed'
-        };
-
-        const shiftedChapters = currentChapters.map(c => {
-          if (c.number >= 5) {
-            return { ...c, number: c.number + 1 };
-          }
-          return c;
-        });
-
-        shiftedChapters.splice(4, 0, newChapter);
-
-        const newCallback: CallbackItem = {
-          id: `cb-heal-${Date.now()}`,
-          setupChapter: 5,
-          payoffChapter: 6,
-          context: "Reference to Sarah's loss aversion panic threshold introduced in chapter 5",
-          resolved: false
-        };
-
-        const newDecision = {
-          timestamp: new Date().toISOString(),
-          step: "Downstream Self-Healing Repair",
-          agent: "Editor",
-          action: "Inserted new Chapter 5; shifted downstream indexes and regenerated TOC markers.",
-          resolution: "Glossary updated; new behavioral callback index setup registered successfully."
-        };
-
-        const updatedBook: BookProject = {
-          ...book,
-          chapters: shiftedChapters,
-          memory: {
-            ...book.memory,
-            callbackIndex: [...book.memory.callbackIndex, newCallback],
-            decisionLog: [...book.memory.decisionLog, newDecision]
-          }
-        };
-
-        updateBookProject(updatedBook);
-        setStudioTab('Preview');
-
-        replyData = {
-          text: "Downstream self-healing pipeline triggered! Successfully inserted 'Chapter 5: The Psychological Ledger' between Chapter 4 and 6. I've automatically shifted subsequent chapter indexes, repaired TOC bindings, registered a new behavioral callback setup for Chapter 6, and updated the Glossary index cards.",
-          agent: "Editor" as const,
-          thinking: "[Editor] Scanning book graph state for structural insertions...\n[Editor] Shifting indexes for Chapters 5-10 (+1 shift completed).\n[Editor] Inserting newly compiled chapter content.\n[Memory Keeper] Re-compiling callback graph index to register setup cb_heal.\n[Assembler] Regenerated dynamic TOC binding references.",
-          cost: 0.034,
-          tokens: 2800
-        };
+      // Refresh local book state from the backend response
+      if (result.projectState) {
+        const fresh = result.projectState as BookProject;
+        // Merge fresh updates to preserve already loaded chapters/characters list
+        updateBookProject({ ...book, ...fresh });
+        if (fresh.chapters?.some((c: ChapterItem) => c.status === 'completed')) {
+          setStudioTab('Preview');
+        }
       }
 
       const agentMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
-        sender: replyData.agent,
-        text: replyData.text,
+        sender: 'System',
+        text: result.reply,
         timestamp: new Date().toISOString(),
-        thinking: replyData.thinking,
-        cost: replyData.cost,
-        tokens: replyData.tokens
+        thinking: result.thinking,
+        cost: result.cost,
+        tokens: result.tokens
       };
-
       setChatMessages([...updatedMessages, agentMsg]);
+
+    } catch (err) {
+      console.error('[Agent] Failed to submit prompt:', err);
+      const errorMsg: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sender: 'System',
+        text: 'Failed to connect to the backend. Please ensure the server is running.',
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages([...updatedMessages, errorMsg]);
+    } finally {
       setIsAgentThinking(false);
-    }, 1500);
+    }
   };
 
-  // Add asset / prompt modal submit handler
-  const handleRegisterUserAsset = (e: React.FormEvent) => {
+  // Add asset / prompt modal submit handler - persists to backend then updates local state
+  const handleRegisterUserAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAssetName.trim()) return;
     if (!book) return;
 
-    const sizeVal = newAssetType === 'Prompt' 
-      ? `${Math.round(newAssetContent.length / 100) / 10 + 0.1} KB` 
+    const assetName = (newAssetName.trim() || selectedAssetFile?.name || '').trim();
+    if (!assetName) return;
+
+    if (selectedAssetFile) {
+      try {
+        const fresh = await apiUploadAssetFile(book.id, selectedAssetFile, newAssetType) as BookProject;
+        if (fresh) updateBookProject(fresh);
+      } catch (err) {
+        console.warn('[Assets] Backend file upload failed.', err);
+      }
+
+      setNewAssetName('');
+      setNewAssetContent('');
+      setSelectedAssetFile(null);
+      setIsAddAssetOpen(false);
+      return;
+    }
+
+    const content = newAssetContent.trim();
+    if (!content) return;
+
+    const sizeVal = newAssetType === 'Prompt'
+      ? `${Math.round(content.length / 100) / 10 + 0.1} KB`
       : '120 KB';
 
     const newAsset: Asset & { content?: string } = {
       id: `as-${Date.now()}`,
-      name: newAssetName.trim(),
+      name: assetName,
       type: newAssetType,
       size: sizeVal,
       addedAt: new Date().toISOString(),
-      content: newAssetContent.trim() || `Reference content registered for file: ${newAssetName.trim()}`
+      content
     };
 
-    const updatedBook: BookProject = {
-      ...book,
-      assets: [...book.assets, newAsset]
-    };
-
-    updateBookProject(updatedBook);
-    
-    // Set active preview immediately to show the newly added asset!
+    // Optimistic local update
+    updateBookProject({ ...book, assets: [...book.assets, newAsset] });
     setSelectedPreviewItem({
       type: 'user_asset',
       id: newAsset.id,
@@ -367,8 +346,18 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
 
     setNewAssetName('');
     setNewAssetContent('');
+    setSelectedAssetFile(null);
     setIsAddAssetOpen(false);
+
+    // Sync to backend
+    try {
+      const fresh = await apiUploadAsset(book.id, { name: newAsset.name, type: newAsset.type, content }) as BookProject;
+      if (fresh) updateBookProject(fresh);
+    } catch (err) {
+      console.warn('[Assets] Backend unreachable, saved locally only.', err);
+    }
   };
+
 
   // Download simulation
   const triggerDownload = (format: 'pdf' | 'docx') => {
@@ -385,9 +374,10 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
   const renderUserAssetsTimeline = () => {
     if (!book) return null;
 
-    // Group assets chronologically relative to project creation time (mocking dates)
-    const initialAssets = book.assets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() < 60000);
-    const subsequentAssets = book.assets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() >= 60000);
+    // Group assets chronologically relative to project creation time
+    const userAssets = book.assets.filter(a => a.name !== 'Project Initial Brief');
+    const initialAssets = userAssets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() < 60000);
+    const subsequentAssets = userAssets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() >= 60000);
 
     return (
       <div className="space-y-6 select-none font-sans">
@@ -509,8 +499,6 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
   const renderPreviewCanvasContent = () => {
     if (!selectedPreviewItem) return null;
 
-    const isPdf = selectedPreviewItem.subtitle?.toLowerCase().includes('pdf');
-
     return (
       <div className="w-full h-full flex flex-col bg-white border border-zinc-250 rounded-lg shadow-xs overflow-hidden font-sans select-text">
         
@@ -528,41 +516,32 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
             className="text-zinc-400 hover:text-zinc-700 text-xs font-bold transition focus:outline-none cursor-pointer"
             title="Close Preview"
           >
-            ✕
+            x
           </button>
         </div>
 
         {/* Editor content wrapper */}
         <div className="flex-1 p-5 overflow-y-auto bg-zinc-50/10 font-mono text-xs leading-relaxed text-zinc-800">
-          {isPdf ? (
-            // If it is a mock PDF reference file, render it inside a clean page format
-            <div className="w-full min-h-[450px] bg-white border border-zinc-200 shadow-xxs p-8 font-serif leading-relaxed text-[11px] relative select-text mb-2 rounded">
-              <div className="flex justify-between text-[8px] font-sans text-zinc-400 uppercase tracking-widest border-b border-zinc-100 pb-1.5 mb-5 shrink-0 select-none">
-                <span>PDF Context Reference</span>
-                <span>Page 1 of 1</span>
-              </div>
-              <h2 className="text-center font-sans text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-4 select-none">Supplied File Context</h2>
-              <div className="whitespace-pre-wrap leading-relaxed text-zinc-800 text-justify font-serif font-light">
-                {selectedPreviewItem.content}
-              </div>
+          <div className="space-y-3 font-sans">
+            <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider select-none border-b border-zinc-100 pb-1 flex justify-between items-center">
+              <span>{selectedPreviewItem.type.replace('_', ' ')} source stream</span>
+              <span className="text-zinc-300 font-mono normal-case text-[8px] font-medium">UTF-8 File Layout</span>
             </div>
-          ) : (
-            // For txt, md, prompts, timelines, render inside a clean full-screen editor text field
-            <div className="space-y-3 font-sans">
-              <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider select-none border-b border-zinc-100 pb-1 flex justify-between items-center">
-                <span>{selectedPreviewItem.type.replace('_', ' ')} source stream</span>
-                <span className="text-zinc-300 font-mono normal-case text-[8px] font-medium">UTF-8 File Layout</span>
-              </div>
-              <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed bg-zinc-50/50 p-4 border border-zinc-100 rounded-md text-zinc-800 font-light max-h-[480px] overflow-y-auto">
-                {selectedPreviewItem.content}
-              </div>
+            <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed bg-zinc-50/50 p-4 border border-zinc-100 rounded-md text-zinc-800 font-light max-h-[480px] overflow-y-auto">
+              {selectedPreviewItem.content}
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
   };
 
+  const previewChapter = book.chapters.find((ch) => ch.status === 'completed') || book.chapters[0];
+  const previewChunks = previewChapter?.content
+    ? previewChapter.content.match(/[\s\S]{1,1200}/g) || []
+    : [];
+  const previewPages = Array.from({ length: Math.max(previewChunks.length, 1) }, (_, idx) => idx + 1);
+  const activePreviewContent = previewChunks[selectedPreviewPage - 1] || '';
 
 
   return (
@@ -662,6 +641,16 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                 
                 {/* Chat Message Stream */}
                 <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+                  {chatMessages.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-center">
+                      <div className="max-w-xs rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-5">
+                        <h3 className="text-xs font-semibold text-zinc-800">No agent conversation yet</h3>
+                        <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">
+                          Send a prompt to plan, draft, revise, or repair this project. Real agent replies will appear here.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {chatMessages.map((msg) => {
                     const isUser = msg.sender === 'user';
                     return (
@@ -703,7 +692,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                         <div className="text-[9px] text-zinc-400 font-medium">Orchestration Graph processing...</div>
                         <div className="bg-zinc-50 border border-zinc-100 text-xs px-3 py-2.5 rounded-lg rounded-tl-none text-zinc-400 italic flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-ping shrink-0" />
-                          RAG context retrieval, fact checker validation, and style человеческое voice.
+                          Running the orchestration graph for this request.
                         </div>
                       </div>
                     </div>
@@ -716,7 +705,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                     type="text"
                     value={promptInput}
                     onChange={(e) => setPromptInput(e.target.value)}
-                    placeholder="Ask agent to plan, write (e.g. 'Draft Chapter 5') or repair outlines..."
+                    placeholder="Ask the agent to plan, draft, revise, or repair outlines..."
                     className="flex-1 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none shadow-xs"
                   />
                   <button
@@ -766,39 +755,28 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-xs space-y-4">
                         <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                           <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Orchestration Graph Trace</h3>
-                          <span className="text-[10px] text-zinc-400 font-semibold uppercase">{book.tonality} preset active</span>
+                          <span className="text-[10px] text-zinc-400 font-semibold uppercase">{book.memory.decisionLog.length} real events</span>
                         </div>
                         
                         <div className="space-y-3 font-sans text-xs">
-                          <div className="flex items-center gap-3">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span className="text-zinc-700 font-semibold w-24">1. Planner</span>
-                            <span className="text-zinc-400">TOC Outline compiled & registered</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${isAgentThinking ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'}`} />
-                            <span className="text-zinc-700 font-semibold w-24">2. Researcher</span>
-                            <span className="text-zinc-400">RAG Semantic document lookups indexed</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${isAgentThinking ? 'bg-indigo-500 animate-pulse' : book.chapters.find(c => c.number === 5)?.status === 'completed' ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                            <span className="text-zinc-700 font-semibold w-24">3. Writer</span>
-                            <span className="text-zinc-400">Chapter draft assembly compiling</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${isAgentThinking ? 'bg-zinc-300' : book.chapters.find(c => c.number === 5)?.status === 'completed' ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                            <span className="text-zinc-700 font-semibold w-24">4. Fact-Checker</span>
-                            <span className="text-zinc-400">Claim citation alignment check complete</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${isAgentThinking ? 'bg-zinc-300' : book.chapters.find(c => c.number === 5)?.status === 'completed' ? 'bg-emerald-500' : 'bg-zinc-200'}`} />
-                            <span className="text-zinc-700 font-semibold w-24">5. Humanizer</span>
-                            <span className="text-zinc-400">AI-tells vocabulary filter finalized</span>
-                          </div>
+                          {book.memory.decisionLog.length === 0 && !isAgentThinking ? (
+                            <p className="text-[11px] text-zinc-400 italic">No graph events yet. Run an agent prompt to populate this trace.</p>
+                          ) : (
+                            book.memory.decisionLog.map((log, idx) => (
+                              <div key={`${log.timestamp}-${idx}`} className="flex items-center gap-3">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span className="text-zinc-700 font-semibold w-24 truncate">{log.agent}</span>
+                                <span className="text-zinc-400 truncate">{log.resolution}</span>
+                              </div>
+                            ))
+                          )}
+                          {isAgentThinking && (
+                            <div className="flex items-center gap-3">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                              <span className="text-zinc-700 font-semibold w-24">Running</span>
+                              <span className="text-zinc-400">Awaiting backend response.</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -812,8 +790,8 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       <div className="w-24 border-r border-zinc-200 bg-white p-2.5 flex flex-col gap-3 overflow-y-auto shrink-0 select-none">
                         <span className="text-[7.5px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5 text-center">Pages</span>
                         
-                        {/* Mock Pages List */}
-                        {[1, 2, 3].map((pageNum) => {
+                        {/* Pages List */}
+                        {previewPages.map((pageNum) => {
                           const isActive = selectedPreviewPage === pageNum;
                           return (
                             <button
@@ -826,11 +804,11 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                                   : 'text-zinc-500 hover:bg-zinc-50 border border-transparent'
                               }`}
                             >
-                              {/* Scaled-down miniature A4 canvas mockup */}
+                              {/* Scaled-down miniature A4 canvas */}
                               <div className={`w-[56px] h-[79px] bg-white border ${isActive ? 'border-zinc-800' : 'border-zinc-200'} rounded p-1 relative flex flex-col justify-between overflow-hidden`}>
                                 {/* Tiny page header */}
                                 <div className="flex justify-between items-center text-[2.5px] text-zinc-300 border-b border-zinc-100 pb-0.5 scale-90 origin-top">
-                                  <span>Ch 5</span>
+                                  <span>{previewChapter ? `Ch ${previewChapter.number}` : 'Book'}</span>
                                   <span>p. {pageNum}</span>
                                 </div>
                                 
@@ -861,75 +839,24 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                           {/* Running Header */}
                           <div className="flex justify-between text-[9px] font-sans text-zinc-400 uppercase tracking-widest border-b border-zinc-100 pb-2 mb-6 shrink-0">
                             <span>{book.title}</span>
-                            <span>Preview Page {selectedPreviewPage} of 3</span>
+                            <span>Preview Page {selectedPreviewPage} of {previewPages.length}</span>
                           </div>
 
                           <div className="space-y-4">
-                            <h2 className="text-center font-sans text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">Chapter 5 · Page {selectedPreviewPage}</h2>
-                            
-                            {selectedPreviewPage === 1 && (
-                              <>
-                                <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">The Lazy Investor: Low-Cost Index Funds</h1>
-                                {book.chapters.find(c => c.number === 5)?.content ? (
-                                  <div className="space-y-4">
-                                    <p className="indent-6 text-justify leading-relaxed">
-                                      {book.chapters.find(c => c.number === 5)?.content.slice(0, 500)}...
-                                    </p>
-                                    <p className="indent-6 text-justify leading-relaxed text-zinc-400 italic text-[10px] pt-4 border-t border-dashed border-zinc-100 text-center">
-                                      [This chapter text continues on Page 2 and Page 3. Select pages from the left outline panels to preview.]
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center p-14 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">
-                                    <span className="text-zinc-400 text-xs mb-2">No chapter text generated yet</span>
-                                    <p className="text-[10px] text-zinc-400 max-w-xs">Ask the Agent in the chat panel to "Draft Chapter 5" to watch the real-time page compilation stream.</p>
-                                  </div>
-                                )}
-                              </>
+                            <h2 className="text-center font-sans text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">
+                              {previewChapter ? `Chapter ${previewChapter.number}` : 'Manuscript'} · Page {selectedPreviewPage}
+                            </h2>
+                            {previewChapter && activePreviewContent ? (
+                              <div className="space-y-4">
+                                <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{previewChapter.title}</h1>
+                                <p className="indent-6 whitespace-pre-wrap text-justify leading-relaxed">{activePreviewContent}</p>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center p-14 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">
+                                <span className="text-zinc-400 text-xs mb-2">No generated chapter preview yet</span>
+                                <p className="text-[10px] text-zinc-400 max-w-xs">Generated chapter text will render here in manuscript pages.</p>
+                              </div>
                             )}
-
-                            {selectedPreviewPage === 2 && (
-                              <>
-                                <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">Section I: Mechanics of Compounding Returns</h1>
-                                {book.chapters.find(c => c.number === 5)?.content ? (
-                                  <div className="space-y-4">
-                                    <p className="indent-6 text-justify leading-relaxed">
-                                      Index funds derive their long-term power from the elegant simplicity of compounding dividends and automated rebalancing. When you invest in a broad-market fund like the S&P 500 or a total stock market ETF, you are acquiring tiny fractional stakes in hundreds of stable, productive enterprises. You are effectively capturing the aggregate performance of the entire economy.
-                                    </p>
-                                    <p className="indent-6 text-justify leading-relaxed">
-                                      Rather than guessing which particular company will perform best over the next quarter, index fund passive structures rely on the wisdom of the crowds. Markets adjust pricing efficiently. The compounding rate acts like a snowball rolling down a mountain—growing incrementally at first, then exponentially.
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center p-14 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">
-                                    <span className="text-zinc-400 text-xs mb-2">No chapter text generated yet</span>
-                                    <p className="text-[10px] text-zinc-400 max-w-xs">Ask the Agent in the chat panel to "Draft Chapter 5" to watch the real-time page compilation stream.</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-
-                            {selectedPreviewPage === 3 && (
-                              <>
-                                <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">Section II: Passive vs Active Portfolio Audits</h1>
-                                {book.chapters.find(c => c.number === 5)?.content ? (
-                                  <div className="space-y-4">
-                                    <p className="indent-6 text-justify leading-relaxed">
-                                      Historical index yields indicate a compound annual growth rate of approximately 9.8% over multi-decade cycles. A significant percentage of professional fund managers fail to beat this baseline over a ten-year horizon. High expense ratios, excessive trading commissions, and emotional cognitive biases drag down active trading performance metrics.
-                                    </p>
-                                    <p className="indent-6 text-justify leading-relaxed">
-                                      By selecting low-cost passive index funds with expense ratios below 0.05%, you are bypassing high commissions and ensuring that almost 100% of your capital is put directly to work. This forms the foundation of what we define as the lazy investor's primary edge.
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center p-14 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">
-                                    <span className="text-zinc-400 text-xs mb-2">No chapter text generated yet</span>
-                                    <p className="text-[10px] text-zinc-400 max-w-xs">Ask the Agent in the chat panel to "Draft Chapter 5" to watch the real-time page compilation stream.</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-
                           </div>
                         </div>
                       </div>
@@ -1004,8 +931,8 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                 </div>
 
                 <div className="pt-4 border-t border-zinc-100 text-[10px] text-zinc-400 space-y-1 shrink-0">
-                  <div>Word Count: <strong>{book.chapters.reduce((s: number, c: ChapterItem) => s + c.wordCount, 0)}</strong> / 25000</div>
-                  <div>TOC self-healing: <strong className="text-emerald-600">Active</strong></div>
+                  <div>Word Count: <strong>{book.chapters.reduce((s: number, c: ChapterItem) => s + c.wordCount, 0)}</strong></div>
+                  <div>Chapters: <strong>{book.chapters.length}</strong></div>
                 </div>
               </div>
 
@@ -1038,8 +965,8 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                             {book.subtitle && <p className="text-[10px] text-zinc-500 italic mt-2 tracking-wider">{book.subtitle}</p>}
                           </div>
                           <div className="text-[10px] text-zinc-400 tracking-wider">
-                            <p className="font-semibold text-zinc-800">AIuthor Publishing Studio</p>
-                            <p className="mt-1">Generated under Next.js & Turbopack configurations</p>
+                            <p className="font-semibold text-zinc-800">Author / Publisher</p>
+                            <p className="mt-1">Publication details will appear here.</p>
                           </div>
                         </div>
                       )}
@@ -1047,10 +974,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       {activeBookSection === 'copyright' && (
                         <div className="text-left font-sans text-[10px] text-zinc-500 max-w-md py-10 space-y-4">
                           <h2 className="text-xs font-bold text-zinc-800">COPYRIGHT REGISTRATION</h2>
-                          <p>© 2026 AIuthor Publishing Group. All rights reserved.</p>
-                          <p>ISBN: 978-3-16-148410-0 (Placeholder)</p>
-                          <p>Edition: First Digital Edition</p>
-                          <p>CIP Block: Data registered under active graph execution state checkers.</p>
+                          <p>Copyright, ISBN, edition, and rights information will appear here when supplied.</p>
                         </div>
                       )}
 
@@ -1077,12 +1001,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       {activeBookSection === 'preface' && (
                         <div className="space-y-4 leading-relaxed text-xs">
                           <h2 className="text-center font-sans text-xs font-semibold uppercase tracking-widest mb-6">Preface</h2>
-                          <p className="indent-6">
-                            This book was compiled using the AIuthor multi-agent pipeline system, a framework dedicated to ensuring facts are grounded and styling is refined under strict human-centric constraints.
-                          </p>
-                          <p className="indent-6">
-                            We invite the reader to explore these chapters with the confidence that every claim has been audited, checked, and humanized to resemble the voice of a professional practitioner dedicated to the domain.
-                          </p>
+                          <p className="text-center text-zinc-400 italic font-sans">Preface content has not been generated yet.</p>
                         </div>
                       )}
 
@@ -1096,12 +1015,12 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                               {ch.status === 'completed' ? (
                                 <div className="text-xs leading-relaxed space-y-4 max-h-[500px] overflow-y-auto pr-2">
                                   <p className="indent-6 text-justify">{ch.content}</p>
-                                  <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: Humanized & Verified</p>
+                                  <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: {ch.status}</p>
                                 </div>
                               ) : (
                                 <div className="flex flex-col items-center justify-center p-12 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">
                                   <span className="text-zinc-400 text-xs mb-2">Chapter Content Empty</span>
-                                  <p className="text-[9px] text-zinc-400 max-w-xs">Ask the Agent in the chat workspace to "Draft Chapter {ch.number}" to trigger the dynamic writing and fact-checking pipeline.</p>
+                                  <p className="text-[9px] text-zinc-400 max-w-xs">Generated content for this chapter will appear here.</p>
                                 </div>
                               )}
                             </div>
@@ -1135,7 +1054,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                           <div className="space-y-3 text-[10px] leading-relaxed max-w-md mx-auto font-sans">
                             {book.memory.factRegistry.map((f: FactItem) => (
                               <div key={f.id} className="text-zinc-600 pl-4 -indent-4">
-                                • {f.source} (Verified by Fact-Checker-Agent on {new Date(f.timestamp).toLocaleDateString()})
+                                - {f.source} (Verified by {f.verifiedBy} on {new Date(f.timestamp).toLocaleDateString()})
                               </div>
                             ))}
                             {book.memory.factRegistry.length === 0 && (
@@ -1148,9 +1067,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       {activeBookSection === 'about-author' && (
                         <div className="space-y-4 text-xs leading-relaxed">
                           <h2 className="text-center font-sans text-xs font-semibold uppercase tracking-widest mb-6">About the Author</h2>
-                          <p className="indent-6">
-                            This book was fully compiled by the <strong>AIuthor Agentic pipeline</strong>, an automated multi-agent layout generator combining modern software patterns in LangGraph, Pydantic data schemas, vector index lookups, and specialized prose editors.
-                          </p>
+                          <p className="text-center text-zinc-400 italic font-sans">Author bio has not been added yet.</p>
                         </div>
                       )}
                     </div>
@@ -1306,7 +1223,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                                         id: char.id,
                                         title: `Bible Entry: ${char.name}`,
                                         subtitle: `Role Profile · Continuity Tracking`,
-                                        content: `ENTITY NAME:\n${char.name}\n\nROLE / CONCEPT KEY:\n${char.role}\n\nCHARACTER DEVELOPMENT ARC:\n${char.arc}\n\nACTIVE REGISTERED CHAPTERS:\nChapters ${char.activeChapters.join(', ')}\n\nCOGNITIVE ATTRIBUTES:\n${Object.entries(char.attributes).map(([k, v]) => `• ${k}: ${v}`).join('\n')}`
+                                        content: `ENTITY NAME:\n${char.name}\n\nROLE / CONCEPT KEY:\n${char.role}\n\nCHARACTER DEVELOPMENT ARC:\n${char.arc}\n\nACTIVE REGISTERED CHAPTERS:\nChapters ${char.activeChapters.join(', ')}\n\nCOGNITIVE ATTRIBUTES:\n${Object.entries(char.attributes).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`
                                       })}
                                       className={`w-full text-left p-2.5 rounded border text-[11px] transition text-zinc-800 cursor-pointer block ${
                                         isActive ? 'bg-zinc-100 border-zinc-950 border-2 text-zinc-950 font-semibold shadow-sm' : 'bg-zinc-50/50 border-zinc-200 hover:bg-zinc-50 border'
@@ -1353,8 +1270,8 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                                     >
                                       <p className="line-clamp-1">{cb.context}</p>
                                       <div className="flex justify-between items-center text-[8.5px] mt-1 font-medium text-zinc-400">
-                                        <span>Ch {cb.setupChapter} ➔ Ch {cb.payoffChapter}</span>
-                                        <span className={`font-semibold ${cb.resolved ? 'text-emerald-600' : 'text-amber-600'}`}>{cb.resolved ? '✓ Resolved' : '○ Setup'}</span>
+                                        <span>Ch {cb.setupChapter} to Ch {cb.payoffChapter}</span>
+                                        <span className={`font-semibold ${cb.resolved ? 'text-emerald-600' : 'text-amber-600'}`}>{cb.resolved ? 'Resolved' : 'Setup'}</span>
                                       </div>
                                     </button>
                                   );
@@ -1371,10 +1288,10 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                               id: 'style-matrix',
                               title: `Tonality Fingerprint Matrix`,
                               subtitle: `Vocabulary Control & Style Metrics`,
-                              content: `ACTIVE WRITING PRESET:\n${book.tonality} style metrics active\n\nSTYLE DIMENSION TARGETS:\n${Object.entries(book.memory.tonalityFingerprint)
+                              content: `ACTIVE WRITING PRESET:\n${book.tonality}\n\nSTYLE DIMENSION TARGETS:\n${Object.entries(book.memory.tonalityFingerprint)
                                 .filter(([_, v]) => typeof v === 'number')
-                                .map(([k, v]) => `• ${k.charAt(0).toUpperCase() + k.slice(1)}: ${Math.round((v as number) * 100)}%`)
-                                .join('\n')}\n\nFORBIDDEN AI VOCABULARY (ALERT MODULE):\nThe humanizer node actively scans and strips these tokens:\n${book.memory.tonalityFingerprint.forbiddenPhrases.map(phrase => `🚫 "${phrase}"`).join('\n')}`
+                                .map(([k, v]) => `- ${k.charAt(0).toUpperCase() + k.slice(1)}: ${Math.round((v as number) * 100)}%`)
+                                .join('\n') || 'No style dimensions recorded yet.'}\n\nFORBIDDEN PHRASES:\n${book.memory.tonalityFingerprint.forbiddenPhrases.length > 0 ? book.memory.tonalityFingerprint.forbiddenPhrases.map(phrase => `- ${phrase}`).join('\n') : 'No forbidden phrases recorded yet.'}`
                             })}
                             className={`w-full rounded-lg border text-left p-4 shadow-xxs bg-white flex justify-between items-center transition cursor-pointer ${
                               selectedPreviewItem?.id === 'style-matrix' ? 'bg-zinc-100 border-zinc-950 border-2 text-zinc-950 font-semibold shadow-sm' : 'border-zinc-200 hover:border-zinc-300 bg-white border'
@@ -1416,7 +1333,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                                     id: logId,
                                     title: `Timeline Log: ${log.step}`,
                                     subtitle: `${log.agent} Node Action`,
-                                    content: `AGENT NODE:\n${log.agent}\n\nSTEP ACTION:\n${log.action}\n\nTIME RESOLVED:\n${new Date(log.timestamp).toLocaleString()}\n\nCOGNITIVE SUMMARY:\n${log.resolution}\n\nSTATE RECOVERY CHECKPOINT:\nCheckpointer initialized successfully.`
+                                    content: `AGENT NODE:\n${log.agent}\n\nSTEP ACTION:\n${log.action}\n\nTIME RESOLVED:\n${new Date(log.timestamp).toLocaleString()}\n\nSUMMARY:\n${log.resolution}`
                                   })}
                                   className={`w-full text-left p-3 rounded-lg border text-xs relative transition shadow-xxs cursor-pointer block ${
                                     isActive
@@ -1463,10 +1380,13 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Add User Context Asset</h3>
                       <button
                         type="button"
-                        onClick={() => setIsAddAssetOpen(false)}
+                        onClick={() => {
+                          setSelectedAssetFile(null);
+                          setIsAddAssetOpen(false);
+                        }}
                         className="text-zinc-400 hover:text-zinc-600 text-xs font-medium cursor-pointer"
                       >
-                        ✕ Close
+                        x Close
                       </button>
                     </div>
 
@@ -1475,8 +1395,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                         <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Asset Name / Prompt Title</label>
                         <input
                           type="text"
-                          required
-                          placeholder="e.g., SARAH_DIARY_MOCK.md or Chapter 5 Outline Edit"
+                          placeholder="Asset name or prompt title"
                           value={newAssetName}
                           onChange={(e) => setNewAssetName(e.target.value)}
                           className="w-full rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500 shadow-xxs"
@@ -1489,26 +1408,63 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                           value={newAssetType}
                           onChange={(e) => {
                             setNewAssetType(e.target.value);
+                            if (e.target.value === 'Prompt') {
+                              setSelectedAssetFile(null);
+                            }
                           }}
                           className="w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500 shadow-xxs"
                         >
-                          <option>PDF Reference</option>
                           <option>Markdown File</option>
                           <option>Text Guidelines</option>
                           <option>Prompt</option>
                         </select>
                       </div>
 
+                      {newAssetType !== 'Prompt' && (
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Upload Asset File</label>
+                          <input
+                            type="file"
+                            accept=".md,.txt,text/markdown,text/plain"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              if (!file) {
+                                setSelectedAssetFile(null);
+                                return;
+                              }
+
+                              const ext = file.name.split('.').pop()?.toLowerCase();
+                              if (ext !== 'md' && ext !== 'txt') {
+                                alert('Only .md and .txt files are supported.');
+                                e.currentTarget.value = '';
+                                setSelectedAssetFile(null);
+                                return;
+                              }
+
+                              setSelectedAssetFile(file);
+                              setNewAssetName((current) => current || file.name);
+                              setNewAssetType(ext === 'md' ? 'Markdown File' : 'Text Guidelines');
+                            }}
+                            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 file:mr-3 file:rounded file:border-0 file:bg-zinc-100 file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-zinc-700 focus:outline-none focus:border-zinc-500 shadow-xxs"
+                          />
+                          {selectedAssetFile && (
+                            <p className="text-[10px] text-zinc-500">
+                              Selected: {selectedAssetFile.name} ({(selectedAssetFile.size / 1024).toFixed(1)} KB)
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="space-y-1">
                         <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">
-                          {newAssetType === 'Prompt' ? 'Prompt Text Content' : 'Reference Content / Guidelines'}
+                          {newAssetType === 'Prompt' ? 'Prompt Text Content' : 'Manual Reference Content'}
                         </label>
                         <textarea
-                          required
+                          required={!selectedAssetFile}
                           rows={6}
                           placeholder={newAssetType === 'Prompt' 
                             ? "Enter prompt instructions, e.g., 'Ensure Sarah resolves her relationship with Marcus by Chapter 10...'"
-                            : "Paste context files details here..."
+                            : "Paste .md or .txt content here, or upload a file above..."
                           }
                           value={newAssetContent}
                           onChange={(e) => setNewAssetContent(e.target.value)}
@@ -1519,7 +1475,10 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       <div className="flex gap-2 justify-end border-t border-zinc-100 pt-3">
                         <button
                           type="button"
-                          onClick={() => setIsAddAssetOpen(false)}
+                          onClick={() => {
+                            setSelectedAssetFile(null);
+                            setIsAddAssetOpen(false);
+                          }}
                           className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
                         >
                           Cancel
@@ -1543,7 +1502,7 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
           {activeTab === 'Settings' && (
             <div className="flex-1 p-8 overflow-y-auto bg-zinc-50 flex flex-col items-center">
               <div className="w-full max-w-2xl space-y-6 font-sans">
-                
+
                 <div>
                   <h2 className="text-sm font-bold text-zinc-950 uppercase tracking-wide">Model Routing Settings</h2>
                   <p className="text-[10px] text-zinc-500 mt-1">Configure orchestration providers, parameters, and credentials for active planner and writer agents.</p>
@@ -1552,78 +1511,46 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                 {/* Agent selectors card */}
                 <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-5">
                   <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">LLM Router Assignments</h3>
-                  
-                  {/* Planner Agent config */}
-                  <div className="grid gap-4 sm:grid-cols-3 items-center">
-                    <span className="text-xs font-semibold text-zinc-700">Planner Agent Node</span>
-                    <select
-                      value={plannerProvider}
-                      onChange={(e) => setPlannerProvider(e.target.value as any)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    >
-                      <option value="Claude">Anthropic Claude</option>
-                      <option value="Gemini">Google Gemini</option>
-                      <option value="OpenAI">OpenAI GPT-4</option>
-                      <option value="Ollama">Ollama (Localhost)</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Model Name"
-                      value={plannerModel}
-                      onChange={(e) => setPlannerModel(e.target.value)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
 
-                  {/* Writer Agent config */}
-                  <div className="grid gap-4 sm:grid-cols-3 items-center">
-                    <span className="text-xs font-semibold text-zinc-700">Writer Agent Node</span>
-                    <select
-                      value={writerProvider}
-                      onChange={(e) => setWriterProvider(e.target.value as any)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    >
-                      <option value="Claude">Anthropic Claude</option>
-                      <option value="Gemini">Google Gemini</option>
-                      <option value="OpenAI">OpenAI GPT-4</option>
-                      <option value="Ollama">Ollama (Localhost)</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Model Name"
-                      value={writerModel}
-                      onChange={(e) => setWriterModel(e.target.value)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
+                  {/* Helper for provider select */}
+                  {(['Planner', 'Writer', 'Fact-Checker'] as const).map((label) => {
+                    const isChecker = label === 'Fact-Checker';
+                    const provider = isChecker ? checkerProvider : label === 'Planner' ? plannerProvider : writerProvider;
+                    const setProvider = isChecker ? setCheckerProvider : label === 'Planner' ? setPlannerProvider : setWriterProvider;
+                    const model = isChecker ? checkerModel : label === 'Planner' ? plannerModel : writerModel;
+                    const setModel = isChecker ? setCheckerModel : label === 'Planner' ? setPlannerModel : setWriterModel;
 
-                  {/* Fact-checker config */}
-                  <div className="grid gap-4 sm:grid-cols-3 items-center">
-                    <span className="text-xs font-semibold text-zinc-700">Fact-Checker Node</span>
-                    <select
-                      value={checkerProvider}
-                      onChange={(e) => setCheckerProvider(e.target.value as any)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    >
-                      <option value="OpenAI">OpenAI GPT-4</option>
-                      <option value="Gemini">Google Gemini</option>
-                      <option value="Claude">Anthropic Claude</option>
-                      <option value="Ollama">Ollama (Localhost)</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Model Name"
-                      value={checkerModel}
-                      onChange={(e) => setCheckerModel(e.target.value)}
-                      className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
+                    return (
+                      <div key={label} className="grid gap-4 sm:grid-cols-3 items-center">
+                        <span className="text-xs font-semibold text-zinc-700">{label} Agent Node</span>
+                        <select
+                          value={provider}
+                          onChange={(e) => setProvider(e.target.value as any)}
+                          className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+                        >
+                          <option value="Claude">Anthropic Claude</option>
+                          <option value="Gemini">Google Gemini</option>
+                          <option value="OpenAI">OpenAI GPT-4</option>
+                          <option value="Nvidia">NVIDIA NIM</option>
+                          <option value="Ollama">Ollama (Localhost)</option>
+                          <option value="Custom">Custom Endpoint</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Model Name"
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                          className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* API Credentials card */}
                 <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-4">
                   <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">Credentials & Connection Endpoints</h3>
-                  
+
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-bold text-zinc-400 uppercase">Anthropic API Key</label>
                     <input
@@ -1656,6 +1583,21 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
                     />
                   </div>
+                  <div className="space-y-1.5 rounded-md border border-green-100 bg-green-50/50 p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                      <label className="text-[9px] font-bold text-green-700 uppercase tracking-wider">NVIDIA NIM API Key</label>
+                      <span className="text-[8px] text-green-500 font-mono bg-green-100 px-1 py-0.5 rounded">integrate.api.nvidia.com</span>
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="nvapi-..."
+                      value={nvidiaKey}
+                      onChange={(e) => setNvidiaKey(e.target.value)}
+                      className="w-full rounded border border-green-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-green-400"
+                    />
+                    <p className="text-[9px] text-green-600 mt-1">Default model: <span className="font-mono">mistralai/mistral-large-3-675b-instruct-2512</span></p>
+                  </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-bold text-zinc-400 uppercase">Ollama Local API Endpoint</label>
@@ -1667,13 +1609,43 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
                       className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
                     />
                   </div>
+                  <div className="space-y-2 rounded-md border border-indigo-100 bg-indigo-50/40 p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      <label className="text-[9px] font-bold text-indigo-700 uppercase tracking-wider">Custom LLM Endpoint</label>
+                      <span className="text-[8px] text-indigo-400 font-mono bg-indigo-100 px-1 py-0.5 rounded">OpenAI-compatible</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="https://your-llm-host.com/v1"
+                      value={customEndpoint}
+                      onChange={(e) => setCustomEndpoint(e.target.value)}
+                      className="w-full rounded border border-indigo-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-indigo-400"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Bearer token / API key for custom endpoint"
+                      value={customApiKey}
+                      onChange={(e) => setCustomApiKey(e.target.value)}
+                      className="w-full rounded border border-indigo-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-indigo-400"
+                    />
+                    <p className="text-[9px] text-indigo-500">Any OpenAI-compatible API - LM Studio, vLLM, Together AI, Groq, etc.</p>
+                  </div>
 
                   <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-3">
                     <button
                       onClick={handleSaveSettings}
-                      className="rounded bg-zinc-950 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 shadow-sm w-full"
+                      disabled={isSavingSettings}
+                      className={`rounded px-4 py-2 text-xs font-semibold text-white transition shadow-sm w-full flex items-center justify-center gap-2 ${
+                        settingsSaved
+                          ? 'bg-emerald-600 hover:bg-emerald-700'
+                          : 'bg-zinc-950 hover:bg-zinc-800'
+                      } disabled:opacity-60`}
                     >
-                      Save Configuration Settings
+                      {isSavingSettings && (
+                        <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      )}
+                      {settingsSaved ? 'Configuration Saved' : isSavingSettings ? 'Saving...' : 'Save Configuration Settings'}
                     </button>
                   </div>
                 </div>
@@ -1688,3 +1660,6 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
     </div>
   );
 }
+
+
+

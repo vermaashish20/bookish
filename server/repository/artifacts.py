@@ -1,0 +1,89 @@
+"""
+Repository for artifacts collection
+Agent-generated content (research notes, drafts, edits, fact-check reports)
+"""
+from typing import Dict, Any, Optional, List
+from bson import ObjectId
+from datetime import datetime
+from db.mongo import get_db
+
+
+def create_artifact(
+    project_id: str,
+    agent_run_id: str,
+    agent_name: str,  # "researcher" | "fact_checker" | "writer" | "humanizer" | "editor"
+    artifact_type: str,  # "research_notes" | "fact_check_report" | "draft" | "edited_content" | "humanized_content"
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    related_chapter_id: Optional[str] = None
+) -> str:
+    """Create a new artifact"""
+    db = get_db()
+    artifact_id = f"artifact_{ObjectId()}"
+    
+    db.artifacts.insert_one({
+        "_id": artifact_id,
+        "projectId": project_id,
+        "agentRunId": agent_run_id,
+        "agentName": agent_name,
+        "artifactType": artifact_type,
+        "content": content,
+        "metadata": metadata or {},
+        "relatedChapterId": related_chapter_id,
+        "createdAt": datetime.utcnow().isoformat()
+    })
+    
+    return artifact_id
+
+
+def get_artifact(artifact_id: str) -> Optional[Dict[str, Any]]:
+    """Get a specific artifact"""
+    db = get_db()
+    artifact = db.artifacts.find_one({"_id": artifact_id})
+    if artifact:
+        artifact["id"] = artifact["_id"]
+    return artifact
+
+
+def get_project_artifacts(
+    project_id: str,
+    agent_name: Optional[str] = None,
+    artifact_type: Optional[str] = None,
+    limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Get artifacts for a project with optional filtering"""
+    db = get_db()
+    
+    query = {"projectId": project_id}
+    
+    if agent_name:
+        query["agentName"] = agent_name
+    
+    if artifact_type:
+        query["artifactType"] = artifact_type
+    
+    cursor = db.artifacts.find(query).sort("createdAt", -1)
+    
+    if limit:
+        cursor = cursor.limit(limit)
+    
+    artifacts = list(cursor)
+    for artifact in artifacts:
+        artifact["id"] = artifact["_id"]
+    
+    return artifacts
+
+
+def get_agent_run_artifacts(agent_run_id: str) -> List[Dict[str, Any]]:
+    """Get all artifacts created during a specific agent run"""
+    db = get_db()
+    artifacts = list(
+        db.artifacts
+        .find({"agentRunId": agent_run_id})
+        .sort("createdAt", 1)
+    )
+    
+    for artifact in artifacts:
+        artifact["id"] = artifact["_id"]
+    
+    return artifacts

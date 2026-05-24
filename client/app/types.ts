@@ -13,6 +13,7 @@ export interface Asset {
   type: string;
   size?: string;
   addedAt: string;
+  content?: string;
 }
 
 export interface FactItem {
@@ -67,7 +68,7 @@ export interface MemoryState {
 }
 
 export interface ModelConfig {
-  provider: 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI';
+  provider: 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
   modelName: string;
   apiKey?: string;
   endpointUrl?: string;

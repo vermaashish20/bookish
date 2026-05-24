@@ -1,246 +1,108 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BookProject, ChapterItem, Asset } from './types';
-
-// Helper to generate a unique ID
-const generateId = () => Math.random().toString(36).substring(2, 9);
-
-// Mock initial data matching PRD Test Cases
-const INITIAL_BOOKS: BookProject[] = [
-  {
-    id: 'test-case-a',
-    title: "The Intelligent Pocket",
-    subtitle: "A Beginner's Guide to Personal Finance",
-    genre: "Non-Fiction / Personal Finance",
-    targetWordCount: 25000,
-    tonality: "Conversational",
-    brief: "A highly accessible guide introducing young adults to budgeting, micro-savings, compound interest, and first investments.",
-    readerProfile: "Gen-Z & Millennials starting their career with zero financial training.",
-    status: "Reviewing",
-    createdAt: "2026-05-20T10:00:00Z",
-    chapters: [
-      { id: 'ch1', number: 1, title: "The Cost of Coffee: Unmasking Small Expenditures", content: "Let's talk about that daily $5 latte. Over a year, that's nearly $1,800. In this chapter, we explore how minor daily cash leaks derail your long-term compound potential without asking you to live on bread and water...", wordCount: 2520, status: 'completed' },
-      { id: 'ch2', number: 2, title: "Your First Vault: Building an Emergency Fund", content: "Life happens. Your car tire blows, your phone cracks, or your landlord raises rent. An emergency fund is your emotional cushion. We target three months of expenses, stashed away in a High-Yield Savings Account (HYSA)...", wordCount: 2480, status: 'completed' },
-      { id: 'ch3', number: 3, title: "The Snowball & The Avalanche: Crushing Debt", content: "Not all debt is created equal. We analyze the mathematical efficiency of the Avalanche method versus the psychological victories of the Snowball method. In this chapter, we outline exactly how to structure your pay-off roadmap...", wordCount: 2610, status: 'completed' },
-      { id: 'ch4', number: 4, title: "The Magic Engine: Compound Interest Demystified", content: "Albert Einstein reportedly called compound interest the eighth wonder of the world. He who understands it, earns it; he who doesn't, pays it. Let's look at how starting at age 22 versus 32 completely alters your retirement horizon...", wordCount: 2550, status: 'completed' },
-      { id: 'ch5', number: 5, title: "The Lazy Investor: Low-Cost Index Funds", content: "You don't need to beat Wall Street. In fact, most professionals can't. We introduce the core mechanics of passive investing through index funds and ETFs, teaching you how to buy the entire market with a single recurring purchase...", wordCount: 1200, status: 'drafting' },
-      { id: 'ch6', number: 6, title: "Tax Shelters: HYSAs, IRAs, and 401ks", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch7', number: 7, title: "The Budget Myth: Designing a Conscious Spending Plan", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch8', number: 8, title: "Salary Negotiation: The Easiest $5,000 You'll Make", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch9', number: 9, title: "Credit Score Mastery: Playing the Bank's Game", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch10', number: 10, title: "The Finish Line: Your Automation Framework", content: "", wordCount: 0, status: 'pending' }
-    ],
-    assets: [
-      { id: 'as1', name: 'Federal Reserve Interest Rates 2026.pdf', type: 'PDF Reference', size: '1.2 MB', addedAt: '2026-05-21T09:00:00Z' },
-      { id: 'as2', name: 'Standard Personal Finance Guidelines.txt', type: 'Text Guidelines', size: '14 KB', addedAt: '2026-05-21T09:15:00Z' }
-    ],
-    memory: {
-      factRegistry: [
-        { id: 'f1', assertion: "Compound interest calculates interest on both the initial principal and the accumulated interest from prior periods.", source: "Malkiel, B. G. (2020). A Random Walk Down Wall Street.", verifiedBy: "Fact-Checker-Agent", timestamp: "2026-05-21T11:20:00Z" },
-        { id: 'f2', assertion: "High-Yield Savings Accounts currently yield 4.25% APY compared to the national brick-and-mortar bank average of 0.06%.", source: "FDIC National Average Rates Q1 2026.", verifiedBy: "Fact-Checker-Agent", timestamp: "2026-05-22T14:10:00Z" }
-      ],
-      characterBible: [],
-      callbackIndex: [
-        { id: 'cb1', setupChapter: 1, payoffChapter: 5, context: "Sarah's green velvet notebook containing her initial micro-savings calculations", resolved: false }
-      ],
-      tonalityFingerprint: {
-        preset: "Conversational",
-        conversational: 0.95,
-        academic: 0.10,
-        storyteller: 0.40,
-        motivational: 0.70,
-        witty: 0.60,
-        forbiddenPhrases: ["it's important to note", "delve into", "in today's fast-paced world", "not only, but also", "landscape of"]
-      },
-      decisionLog: [
-        { timestamp: "2026-05-21T10:05:00Z", step: "Outline Generation", agent: "Planner", action: "Structured 10 logical chapters covering finance basics.", resolution: "Outline saved to book state; verified sequence flow." },
-        { timestamp: "2026-05-22T11:30:00Z", step: "Chapter 3 Fact Check", agent: "Fact-Checker", action: "Flagged definition of Avalanche debt payoff.", resolution: "Cross-referenced with RAG data; clarified that highest APR is targeted first." }
-      ]
-    }
-  },
-  {
-    id: 'test-case-b',
-    title: "Shadows of the Ledger",
-    subtitle: "A Tale of Two Balance Sheets",
-    genre: "Fiction / Novella",
-    targetWordCount: 12000,
-    tonality: "Storyteller",
-    brief: "A corporate drama following a junior auditor who uncovers a discrepancy in a major tech firm's ledger, leading to a moral dilemma with her mentor.",
-    readerProfile: "Fans of corporate thrillers and character-driven suspense.",
-    status: "Drafting",
-    createdAt: "2026-05-22T14:30:00Z",
-    chapters: [
-      { id: 'ch_b1', number: 1, title: "The Chestnut Desk", content: "The coffee was tepid, but Sarah didn't mind. Her eyes were glued to the eleventh column of the spreadsheet. On her desk sat a worn green velvet notebook, a graduation gift from her father. In it, she had scribbled a single recurring calculation. Today, the math wasn't adding up. Marcus, her senior manager, walked past her desk, his shadow stretching across the polished oak...", wordCount: 2200, status: 'completed' },
-      { id: 'ch_b2', number: 2, title: "The Eleventh Column", content: "Marcus adjusted his silver cufflinks, a habit he did only when cornered. 'It's a rounding anomaly, Sarah,' he said, his voice smooth like bourbon. But she had seen the secondary account routing. The ledger wasn't just rounding; it was bleeding into a shell account registered in Delaware. She clutched the green notebook tighter, her nails biting into the velvet...", wordCount: 2350, status: 'completed' },
-      { id: 'ch_b3', number: 3, title: "A Midnight Audit", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch_b4', number: 4, title: "The Delaware Loophole", content: "", wordCount: 0, status: 'pending' },
-      { id: 'ch_b5', number: 5, title: "The Final Balance", content: "", wordCount: 0, status: 'pending' }
-    ],
-    assets: [
-      { id: 'as_b1', name: 'Auditing Guidelines & Fraud Standard.txt', type: 'Guidelines Document', size: '24 KB', addedAt: '2026-05-22T14:40:00Z' }
-    ],
-    memory: {
-      factRegistry: [],
-      characterBible: [
-        { id: 'c_sarah', name: "Sarah", role: "Junior Auditor", attributes: { "Age": "24", "Style": "Meticulous, risk-averse", "Notebook": "Green velvet journal" }, arc: "Learns to trust her analytical instinct over corporate pressure.", activeChapters: [1, 2] },
-        { id: 'c_marcus', name: "Marcus", role: "Senior Audit Partner", attributes: { "Age": "47", "Habit": "Adjusting silver cufflinks", "Tone": "Charming, patronizing" }, arc: "Desperately tries to cover compliance failures, leading to exposure.", activeChapters: [1, 2] }
-      ],
-      callbackIndex: [
-        { id: 'cb_b1', setupChapter: 1, payoffChapter: 5, context: "Sarah's green velvet notebook containing private auditor logs", resolved: false }
-      ],
-      tonalityFingerprint: {
-        preset: "Storyteller",
-        conversational: 0.30,
-        academic: 0.15,
-        storyteller: 0.98,
-        motivational: 0.40,
-        witty: 0.35,
-        forbiddenPhrases: ["it's important to note", "delve into", "first and foremost", "landscape of", "mechanical triads"]
-      },
-      decisionLog: [
-        { timestamp: "2026-05-22T14:35:00Z", step: "Character Concept Setup", agent: "Planner", action: "Drafted character models for Sarah and Marcus.", resolution: "Registered character definitions in the Character Bible database." }
-      ]
-    }
-  }
-];
+import type { BookProject } from './types';
+import { fetchProjects, createProject, deleteProject, uploadAssetFile } from './lib/api';
 
 export default function Home() {
   const router = useRouter();
   const [books, setBooks] = useState<BookProject[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Simplified Form states
   const [title, setTitle] = useState('');
   const [genre, setGenre] = useState('Non-Fiction / Personal Finance');
   const [brief, setBrief] = useState('');
-  const [attachedFileName, setAttachedFileName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [startAgent, setStartAgent] = useState(true); // true = Start Agent, false = Create Project Only
 
-  // Load books on component mount
-  useEffect(() => {
-    const saved = localStorage.getItem('aiuthor_projects');
-    if (saved) {
-      try {
-        setBooks(JSON.parse(saved));
-      } catch (e) {
-        setBooks(INITIAL_BOOKS);
-        localStorage.setItem('aiuthor_projects', JSON.stringify(INITIAL_BOOKS));
+  // Handle uploaded file validation
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext === 'txt' || ext === 'md') {
+        setSelectedFile(file);
+      } else {
+        alert('Only .txt and .md files are supported!');
       }
-    } else {
-      setBooks(INITIAL_BOOKS);
-      localStorage.setItem('aiuthor_projects', JSON.stringify(INITIAL_BOOKS));
+    }
+  };
+
+  // Load books function
+  const loadProjects = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await fetchProjects();
+      setBooks(data);
+    } catch (err) {
+      console.error("Failed to load projects from backend", err);
+      setError(err instanceof Error ? err.message : 'Failed to load projects');
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  // Save books back to localstorage
-  const saveProjects = (updated: BookProject[]) => {
-    setBooks(updated);
-    localStorage.setItem('aiuthor_projects', JSON.stringify(updated));
-  };
+  // Load books on component mount
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   // Form submit handler to create new book project
-  const handleCreateBook = (e: React.FormEvent) => {
+  const handleCreateBook = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    const newId = `book-${generateId()}`;
-    const initialAssets: Asset[] = [];
-    if (attachedFileName.trim()) {
-      initialAssets.push({
-        id: `as-init-${Date.now()}`,
-        name: attachedFileName.trim(),
-        type: attachedFileName.toLowerCase().endsWith('.pdf') ? 'PDF Reference' :
-              attachedFileName.toLowerCase().endsWith('.md') ? 'Markdown Reference' : 'Text Guidelines',
-        size: '180 KB',
-        addedAt: new Date().toISOString()
+    try {
+      const newBook = await createProject({
+        title: title.trim(),
+        genre,
+        brief: brief.trim(),
+        run_agents: startAgent
       });
-    }
 
-    const tonalityPreset: BookProject['tonality'] = 
-      genre.includes('Finance') ? 'Conversational' :
-      genre.includes('Fiction') ? 'Storyteller' :
-      genre.includes('Academic') ? 'Academic' : 'Motivational';
-
-    // If starting agent immediately, compile standard active chapters.
-    // If not, compile empty drafting chapters.
-    const generatedChapters: ChapterItem[] = Array.from({ length: 5 }, (_, i) => ({
-      id: `ch-${newId}-${i+1}`,
-      number: i + 1,
-      title: startAgent ? `Chapter ${i + 1}: Generated Focus Outline` : `Chapter ${i + 1}: Empty Draft Canvas`,
-      content: "",
-      wordCount: 0,
-      status: 'pending'
-    }));
-
-    const decisionLogItem = startAgent ? {
-      timestamp: new Date().toISOString(),
-      step: "Project Planner Activated",
-      agent: "Planner",
-      action: "Triggered active planner agent pipeline. Generated core chapters.",
-      resolution: "Pipeline loaded; awaiting specific drafting tasks."
-    } : {
-      timestamp: new Date().toISOString(),
-      step: "Project Registered Only",
-      agent: "System",
-      action: "Initialized blank project canvas without active agents. Assets loaded in background.",
-      resolution: "Workspace created successfully; planner agent is currently paused."
-    };
-
-    const newBook: BookProject = {
-      id: newId,
-      title: title.trim(),
-      subtitle: startAgent ? "Agent Initialized Project" : "Manual Draft Project",
-      genre,
-      targetWordCount: 25000,
-      tonality: tonalityPreset,
-      brief: brief.trim(),
-      readerProfile: "Default target reader profile",
-      status: startAgent ? 'Drafting' : 'Drafting',
-      createdAt: new Date().toISOString(),
-      chapters: generatedChapters,
-      assets: initialAssets,
-      memory: {
-        factRegistry: [],
-        characterBible: [],
-        callbackIndex: [],
-        tonalityFingerprint: {
-          preset: tonalityPreset,
-          conversational: tonalityPreset === 'Conversational' ? 0.9 : 0.3,
-          academic: tonalityPreset === 'Academic' ? 0.9 : 0.2,
-          storyteller: tonalityPreset === 'Storyteller' ? 0.9 : 0.3,
-          motivational: tonalityPreset === 'Motivational' ? 0.9 : 0.3,
-          witty: 0.4,
-          forbiddenPhrases: ["it's important to note", "delve into", "in today's fast-paced world", "not only, but also"]
-        },
-        decisionLog: [decisionLogItem]
+      // If a real file was selected, upload it for backend parsing.
+      if (selectedFile) {
+        try {
+          await uploadAssetFile(newBook.id, selectedFile);
+        } catch (err) {
+          console.error("Failed to upload selected file", err);
+        }
       }
-    };
 
-    const updated = [newBook, ...books];
-    saveProjects(updated);
-    setIsModalOpen(false);
+      setIsModalOpen(false);
 
-    // Reset Form
-    setTitle('');
-    setGenre('Non-Fiction / Personal Finance');
-    setBrief('');
-    setAttachedFileName('');
-    setStartAgent(true);
+      // Reset Form
+      setTitle('');
+      setGenre('Non-Fiction / Personal Finance');
+      setBrief('');
+      setSelectedFile(null);
+      setStartAgent(true);
 
-    // Route to working area
-    router.push(`/book/${newId}`);
+      // Route to working area
+      router.push(`/book/${newBook.id}`);
+    } catch (err) {
+      console.error("Failed to create book project", err);
+      alert('Failed to create project. Please try again.');
+    }
   };
 
   // Delete project
-  const handleDeleteProject = (id: string, e: React.MouseEvent) => {
+  const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     if (confirm("Are you sure you want to delete this project?")) {
-      const updated = books.filter(b => b.id !== id);
-      saveProjects(updated);
+      try {
+        await deleteProject(id);
+        setBooks(prev => prev.filter(b => b.id !== id));
+      } catch (err) {
+        console.error("Failed to delete project", err);
+      }
     }
   };
 
@@ -255,6 +117,24 @@ export default function Home() {
             <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest">Workspace Dashboard</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-zinc-500">
+            <button
+              onClick={loadProjects}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh projects"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                strokeWidth={2} 
+                stroke="currentColor" 
+                className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+              {isLoading ? 'Loading...' : 'Refresh'}
+            </button>
             <span>Gateway Technical Assessment</span>
           </div>
         </div>
@@ -283,7 +163,35 @@ export default function Home() {
         </div>
 
         {/* Books Grid */}
-        {books.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-zinc-200 bg-white p-12 text-center">
+            <svg 
+              className="w-8 h-8 text-zinc-400 animate-spin mb-3" 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 className="text-xs font-semibold text-zinc-800">Loading projects...</h3>
+            <p className="mt-1 text-[11px] text-zinc-500">Please wait while we fetch your book projects.</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-red-200 bg-red-50 p-12 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-red-500 mb-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <h3 className="text-xs font-semibold text-red-800">Failed to load projects</h3>
+            <p className="mt-1 text-[11px] text-red-600 max-w-xs">{error}</p>
+            <button
+              onClick={loadProjects}
+              className="mt-4 rounded-md border border-red-300 bg-white px-3 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-50 transition"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : books.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="w-8 h-8 text-zinc-400 mb-3">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
@@ -424,17 +332,48 @@ export default function Home() {
               {/* Initial Upload Asset Section */}
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Initial Assets & Reference Uploads</label>
-                <div className="grid gap-4 sm:grid-cols-2 items-center">
+                <div className="relative">
                   <input
-                    type="text"
-                    placeholder="Enter file name (e.g., financial_rules_2026.pdf)"
-                    value={attachedFileName}
-                    onChange={(e) => setAttachedFileName(e.target.value)}
-                    className="w-full rounded-md border border-zinc-200 bg-white px-3.5 py-2 text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none"
+                    type="file"
+                    id="initial-asset-upload"
+                    accept=".txt,.md,text/plain,text/markdown"
+                    onChange={handleFileChange}
+                    className="hidden"
                   />
-                  <div className="text-[10px] text-zinc-400 italic">
-                    Type a file name (.pdf, .txt, .md) to mock upload reference guides to the Assets tab.
-                  </div>
+                  {selectedFile ? (
+                    <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50/50 px-4 py-3 text-xs">
+                      <div className="flex items-center gap-2.5 truncate">
+                        <span className="text-base select-none">
+                          {selectedFile.name.toLowerCase().endsWith('.md') ? '📝' : '📖'}
+                        </span>
+                        <div className="truncate">
+                          <p className="font-semibold text-zinc-900 truncate">{selectedFile.name}</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFile(null)}
+                        className="rounded-full p-1 text-zinc-400 hover:bg-zinc-250 hover:text-zinc-600 transition focus:outline-none cursor-pointer"
+                        title="Remove file"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="initial-asset-upload"
+                      className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 hover:border-zinc-350 bg-white p-5 text-center cursor-pointer transition-all hover:bg-zinc-50/20 select-none group"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-zinc-400 group-hover:text-zinc-500 transition mb-1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                      <p className="text-[11px] font-semibold text-zinc-700 group-hover:text-zinc-950 transition">Click to select reference file</p>
+                      <p className="text-[9px] text-zinc-400 font-medium mt-0.5">Supports TXT or MD references (max 10MB)</p>
+                    </label>
+                  )}
                 </div>
               </div>
 
