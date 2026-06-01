@@ -392,12 +392,23 @@ export default function BookWorkspacePage({ params }: { params: Promise<{ id: st
 
   const handleResume = async (decision: string) => {
     if (!pendingConfirmation || !book) return;
+    
+    console.log('='.repeat(80));
+    console.log('[DEBUG RESUME] handleResume called');
+    console.log('[DEBUG RESUME] Decision:', decision);
+    console.log('[DEBUG RESUME] Run ID:', pendingConfirmation.run_id);
+    console.log('[DEBUG RESUME] Project ID:', book.id);
+    
     try {
+      console.log('[DEBUG RESUME] Calling resumeAgent API...');
       await resumeAgent(book.id, pendingConfirmation.run_id, decision);
+      console.log('[DEBUG RESUME] ✅ Agent resumed successfully');
       setPendingConfirmation(null);
     } catch (err) {
-      console.error("Failed to resume agent:", err);
+      console.error('[DEBUG RESUME] ❌ Failed to resume agent:', err);
     }
+    
+    console.log('='.repeat(80));
   };
 
   // Add asset / prompt modal submit handler - persists to backend then updates local state
