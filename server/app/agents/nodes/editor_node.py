@@ -7,7 +7,8 @@ from datetime import datetime
 from app.agents.orchestration_state import AgentOrchestrationState
 from app.core.model_config import load_model_config
 from app.prompts.editor import PROMPT as EDITOR_PROMPT
-from app.infrastructure.llm.service import call_llm, stream_queue_var, stream_event_type_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import publish_status, stream_event_type_var
 from app.repositories.artifacts import create_artifact
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.projects import get_project, get_book_summary, update_book_summary
@@ -37,9 +38,7 @@ def editor_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
 
     thinking = f"[Editor] Starting task: {current_task['task']}\n"
 
-    q = stream_queue_var.get()
-    if q:
-        q.put({"event": "agent_status", "text": "📝 Editor is polishing the draft..."})
+    publish_status("Editor is polishing the draft...")
 
     state["tasks"][current_task_idx]["status"] = "running"
     state["tasks"][current_task_idx]["startedAt"] = datetime.utcnow().isoformat()
@@ -118,12 +117,18 @@ TEXT TO EDIT:
 
     thinking += f"[Editor] Artifact saved: {artifact_id}\n"
 
-    # Update the chapter to 'published' — look up chapter_id from writer's task
+    # Update the chapter to 'published'. Use the nearest preceding writer task so
+    # multi-chapter plans do not repeatedly publish the first generated chapter.
     chapter_id = None
-    for task in state["tasks"]:
+    for task in reversed(state["tasks"][:current_task_idx]):
         if task.get("agent") == "writer" and task.get("chapterId"):
             chapter_id = task["chapterId"]
             break
+    if not chapter_id:
+        for task in reversed(state["tasks"]):
+            if task.get("agent") == "writer" and task.get("chapterId"):
+                chapter_id = task["chapterId"]
+                break
 
     if chapter_id:
         # Generate a one-paragraph chapter summary for lightweight context
@@ -207,11 +212,6 @@ TEXT TO EDIT:
         output_artifact_id=artifact_id,
     )
 
-    # Surface result to user via stream (non-blocking)
-    if q:
-        q.put({
-            "event": "agent_status",
-            "text": "✅ Editorial polish complete. Review the final draft in the Agent Flow trace.",
-        })
+    publish_status("Editorial polish complete. Review the final draft in the Agent Flow trace.")
 
     return state

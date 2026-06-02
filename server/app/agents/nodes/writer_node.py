@@ -17,7 +17,8 @@ from app.repositories.artifacts import create_artifact
 from app.repositories.chapters import add_chapter, get_project_chapters
 from app.repositories.characters import get_project_characters
 from app.repositories.projects import get_project
-from app.infrastructure.llm.service import call_llm, stream_event_type_var, stream_queue_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import publish_status, stream_event_type_var
 
 
 @observe()
@@ -30,9 +31,7 @@ def writer_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     project_id = state["projectId"]
     thinking = f"[Writer] Starting task: {current_task['task']}\n"
 
-    q = stream_queue_var.get(None)
-    if q:
-        q.put({"event": "agent_status", "text": "Writer is generating content..."})
+    publish_status("Writer is generating content...")
 
     task_idx, exec_idx = begin_task(state, "writer", current_task["task"])
 

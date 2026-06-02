@@ -70,11 +70,11 @@ flowchart LR
 
 ```
 bookish/
-├── client/                 # Next.js app (workspace UI)
-│   └── app/
-│       ├── book/[id]/      # Main project workspace
-│       ├── components/     # Editor, chat, agent trace, etc.
-│       └── lib/api.ts      # API client
+├── client/                 # Next.js app (workspace UI) — see client/README.md
+│   ├── app/                # Routes (dashboard + /book/[id])
+│   ├── features/workspace/ # Workspace hooks, tabs, WorkspaceView
+│   ├── components/workspace/
+│   └── lib/api/            # HTTP + SSE client
 ├── server/                 # FastAPI backend
 │   ├── app/                # Application package (production code)
 │   │   ├── api/routes/     # HTTP handlers

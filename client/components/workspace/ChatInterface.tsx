@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { ChatMessage } from '../types';
+import { ChatMessage } from '@/lib/types';
 
 interface ChatInterfaceProps {
   chatMessages: ChatMessage[];

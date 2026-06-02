@@ -187,6 +187,14 @@ def run_react_loop(
 
     while iteration < max_iterations:
         iteration += 1
+        from app.agents.streaming import (
+            HIDDEN_STREAM,
+            buffer_llm_stream,
+            flush_buffered_stream,
+            publish_text,
+            stream_event_type_var,
+        )
+
         user_msg = base_user_prompt
         if tool_context:
             user_msg += (
@@ -195,16 +203,37 @@ def run_react_loop(
             )
 
         thinking += f"Iteration {iteration}: calling LLM...\n"
-        last_response = call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_msg,
-            **llm_kwargs,
-        )
+        stream_event_type = stream_event_type_var.get()
+        should_buffer_stream = stream_event_type != HIDDEN_STREAM
+        buffered_tokens = None
+
+        if should_buffer_stream:
+            with buffer_llm_stream(stream_event_type) as buffered_tokens:
+                last_response = call_llm(
+                    system_prompt=system_prompt,
+                    user_prompt=user_msg,
+                    **llm_kwargs,
+                )
+        else:
+            last_response = call_llm(
+                system_prompt=system_prompt,
+                user_prompt=user_msg,
+                **llm_kwargs,
+            )
+
+        def flush_final_output() -> None:
+            if not should_buffer_stream:
+                return
+            if buffered_tokens is not None and getattr(buffered_tokens, "seen_tokens", False):
+                flush_buffered_stream(buffered_tokens, stream_event_type)
+            else:
+                publish_text(last_response, stream_event_type)
 
         try:
             parsed = json.loads(extract_json(last_response))
         except json.JSONDecodeError as exc:
             thinking += f"Non-JSON response ({exc}); treating as final output.\n"
+            flush_final_output()
             return ReActResult(content=last_response, thinking=thinking)
 
         is_tool = False
@@ -218,6 +247,7 @@ def run_react_loop(
                 args = parsed.get("arguments", {})
             elif parsed.get("type") == "final":
                 thinking += "Final structured output received.\n"
+                flush_final_output()
                 return ReActResult(content=json.dumps(parsed), thinking=thinking)
         elif "tool_call" in parsed:
             is_tool = True
@@ -230,6 +260,7 @@ def run_react_loop(
             continue
 
         thinking += "Final output received.\n"
+        flush_final_output()
         return ReActResult(content=last_response, thinking=thinking)
 
     thinking += "Max iterations reached; using last response.\n"
@@ -330,21 +361,11 @@ def wait_for_hitl(
     from app.agents.hitl import create_hitl_event, get_hitl_response
 
     run_id = state["agentRunId"]
-    q = None
-    try:
-        from app.infrastructure.llm.service import stream_queue_var
-        q = stream_queue_var.get()
-    except LookupError:
-        pass
+    from app.agents.streaming import publish_chat_message, publish_user_confirmation
 
-    if q:
-        if summary_text:
-            q.put({"event": "chat_message", "text": summary_text})
-        q.put({
-            "event": "user_confirmation",
-            "text": prompt_text,
-            "run_id": run_id,
-        })
+    if summary_text:
+        publish_chat_message(summary_text)
+    publish_user_confirmation(prompt_text, run_id)
 
     event = create_hitl_event(run_id)
     event.wait()

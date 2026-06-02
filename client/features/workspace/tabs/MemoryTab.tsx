@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { BookProject } from '../types';
-import MemoryPanel from '../components/MemoryPanel';
+import { BookProject } from '@/lib/types';
+import MemoryPanel from '@/components/workspace/MemoryPanel';
 
 interface MemoryTabProps {
   book: BookProject;

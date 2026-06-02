@@ -2,9 +2,10 @@ export interface ChapterItem {
   id: string;
   number: number;
   title: string;
-  content: string;
+  content?: string;
+  summary?: string;
   wordCount: number;
-  status: 'pending' | 'drafting' | 'completed';
+  status: 'pending' | 'drafting' | 'draft' | 'completed' | 'published';
 }
 
 export interface Asset {
@@ -28,9 +29,12 @@ export interface CharacterBibleItem {
   id: string;
   name: string;
   role: string;
-  attributes: Record<string, string>;
+  type?: string;
+  description?: string;
+  attributes: Record<string, unknown>;
   arc: string;
   activeChapters: number[];
+  status?: string;
 }
 
 export interface CallbackItem {
@@ -52,6 +56,18 @@ export interface DecisionItem {
   artifactContent?: string;
 }
 
+export interface GeneratedArtifact {
+  id: string;
+  projectId: string;
+  agentRunId: string;
+  agentName: string;
+  artifactType: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  relatedChapterId?: string | null;
+  createdAt: string;
+}
+
 export interface TonalityFingerprint {
   preset: string;
   conversational: number;
@@ -70,8 +86,18 @@ export interface MemoryState {
   decisionLog: DecisionItem[];
 }
 
+export type LLMProvider =
+  | 'Ollama'
+  | 'Gemini'
+  | 'Claude'
+  | 'OpenAI'
+  | 'OpenRouter'
+  | 'Sarvam'
+  | 'Nvidia'
+  | 'Custom';
+
 export interface ModelConfig {
-  provider: 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
+  provider: LLMProvider;
   modelName: string;
   apiKey?: string;
   endpointUrl?: string;
@@ -92,14 +118,15 @@ export interface BookProject {
   title: string;
   subtitle: string;
   genre: string;
-  targetWordCount: number;
+  targetWordCount?: number;
   tonality: 'Conversational' | 'Academic' | 'Storyteller' | 'Motivational' | 'Witty';
   brief: string;
-  readerProfile: string;
-  status: 'Drafting' | 'Reviewing' | 'Fact-Checking' | 'Humanizing' | 'Completed' | 'Ready';
+  readerProfile?: string;
+  status: 'Drafting' | 'Reviewing' | 'Fact-Checking' | 'Humanizing' | 'Completed' | 'Ready' | string;
   createdAt: string;
   chapters: ChapterItem[];
   assets: Asset[];
+  artifacts?: GeneratedArtifact[];
   memory: MemoryState;
   settings?: ProjectSettings;
 }
@@ -113,3 +140,14 @@ export interface ChatMessage {
   cost?: number;
   tokens?: number;
 }
+
+export type PreviewItem = {
+  type: 'user_asset' | 'fact' | 'character' | 'callback' | 'style' | 'timeline' | 'artifact';
+  id: string;
+  title: string;
+  subtitle?: string;
+  content: string;
+  artifactContent?: string;
+};
+
+export type WorkspaceTab = 'Agent' | 'Book' | 'Memory' | 'Settings';

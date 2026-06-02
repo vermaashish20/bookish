@@ -34,8 +34,11 @@ def load_project_context(project_id: str) -> ProjectContext:
     if not project:
         project = {}
 
-    # Count characters without fetching documents
-    character_count = db.characters.count_documents({"projectId": project_id})
+    # Count persisted memory entries without fetching full documents.
+    character_count = (
+        db.character_bible.count_documents({"projectId": project_id})
+        + db.entity_bible.count_documents({"projectId": project_id})
+    )
 
     # Lightweight chapter index — no content field
     chapter_summaries = get_chapter_summaries(project_id)

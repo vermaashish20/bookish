@@ -6,7 +6,8 @@ from typing import Dict, Any, Optional, List
 from bson import ObjectId
 from datetime import datetime
 from app.infrastructure.database.mongo import get_db
-from app.services.indexing import index_artifact
+from app.services.indexing import enqueue_index_artifact
+from app.agents.streaming import publish_sync_event
 
 
 def create_artifact(
@@ -22,7 +23,7 @@ def create_artifact(
     db = get_db()
     artifact_id = f"artifact_{ObjectId()}"
     
-    db.artifacts.insert_one({
+    artifact = {
         "_id": artifact_id,
         "projectId": project_id,
         "agentRunId": agent_run_id,
@@ -32,9 +33,12 @@ def create_artifact(
         "metadata": metadata or {},
         "relatedChapterId": related_chapter_id,
         "createdAt": datetime.utcnow().isoformat()
-    })
+    }
+    db.artifacts.insert_one(artifact)
 
-    index_artifact(artifact_id)
+    enqueue_index_artifact(artifact_id)
+    payload = {**artifact, "id": artifact_id}
+    publish_sync_event("artifact_created", artifact=payload)
     return artifact_id
 
 

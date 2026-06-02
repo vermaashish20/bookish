@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
-from app.services.indexing import index_user_asset
+from app.services.indexing import enqueue_index_user_asset
 
 
 def add_user_asset(project_id: str, name: str, asset_type: str, size: str, added_at: str, content: str):
@@ -19,13 +19,13 @@ def add_user_asset(project_id: str, name: str, asset_type: str, size: str, added
         "addedAt": added_at,
         "content": content,
     })
-    index_user_asset(project_id, asset_id, asset_type)
+    enqueue_index_user_asset(project_id, asset_id, asset_type)
     return asset_id
 
 
 def get_project_assets(project_id: str) -> List[Dict[str, Any]]:
     db = get_db()
-    assets = list(db.user_assets.find({"projectId": project_id}))
+    assets = list(db.user_assets.find({"projectId": project_id}).sort("addedAt", 1))
     for asset in assets:
         asset["id"] = asset["_id"]
     return assets

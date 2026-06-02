@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
+type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'OpenRouter' | 'Sarvam' | 'Nvidia' | 'Custom';
 
 interface SettingsPanelProps {
   plannerProvider: ProviderType;
@@ -39,6 +39,10 @@ interface SettingsPanelProps {
   setGeminiKey: (value: string) => void;
   openaiKey: string;
   setOpenaiKey: (value: string) => void;
+  openrouterKey: string;
+  setOpenrouterKey: (value: string) => void;
+  sarvamKey: string;
+  setSarvamKey: (value: string) => void;
   nvidiaKey: string;
   setNvidiaKey: (value: string) => void;
   ollamaEndpoint: string;
@@ -79,6 +83,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -106,6 +112,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -133,6 +141,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -160,6 +170,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -187,6 +199,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -214,6 +228,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -241,6 +257,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               <option value="Claude">Anthropic Claude</option>
               <option value="Gemini">Google Gemini</option>
               <option value="OpenAI">OpenAI GPT-4</option>
+              <option value="OpenRouter">OpenRouter</option>
+              <option value="Sarvam">Sarvam AI</option>
               <option value="Nvidia">NVIDIA NIM</option>
               <option value="Ollama">Ollama (Localhost)</option>
               <option value="Custom">Custom Endpoint</option>
@@ -296,6 +314,38 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               onChange={(e) => props.setOpenaiKey(e.target.value)}
               className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
             />
+          </div>
+
+          <div className="space-y-1.5 rounded-md border border-violet-100 bg-violet-50/50 p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+              <label className="text-[9px] font-bold text-violet-700 uppercase tracking-wider">OpenRouter API Key</label>
+              <span className="text-[8px] text-violet-500 font-mono bg-violet-100 px-1 py-0.5 rounded">openrouter.ai</span>
+            </div>
+            <input
+              type="password"
+              placeholder="sk-or-v1-..."
+              value={props.openrouterKey}
+              onChange={(e) => props.setOpenrouterKey(e.target.value)}
+              className="w-full rounded border border-violet-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-violet-400"
+            />
+            <p className="text-[9px] text-violet-600 mt-1">Example model: <span className="font-mono">openai/gpt-4o-mini</span></p>
+          </div>
+
+          <div className="space-y-1.5 rounded-md border border-orange-100 bg-orange-50/50 p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+              <label className="text-[9px] font-bold text-orange-700 uppercase tracking-wider">Sarvam API Key</label>
+              <span className="text-[8px] text-orange-500 font-mono bg-orange-100 px-1 py-0.5 rounded">api.sarvam.ai</span>
+            </div>
+            <input
+              type="password"
+              placeholder="Sarvam API token"
+              value={props.sarvamKey}
+              onChange={(e) => props.setSarvamKey(e.target.value)}
+              className="w-full rounded border border-orange-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-orange-400"
+            />
+            <p className="text-[9px] text-orange-600 mt-1">Default model: <span className="font-mono">sarvam-105b</span></p>
           </div>
           
           <div className="space-y-1.5 rounded-md border border-green-100 bg-green-50/50 p-3">

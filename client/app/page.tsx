@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { BookProject } from './types';
-import { fetchProjects, createProject, deleteProject, uploadAssetFile } from './lib/api';
+import type { BookProject } from '@/lib/types';
+import { createProject, deleteProject, fetchProjects, uploadAssetFile } from '@/lib/api';
 
 export default function Home() {
   const router = useRouter();

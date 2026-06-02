@@ -3,7 +3,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChapterItem, DecisionItem } from '../types';
+import { ChapterItem, DecisionItem } from '@/lib/types';
 
 interface PreviewCanvasProps {
   chapter: ChapterItem | undefined;

@@ -17,7 +17,15 @@ from app.core.model_config import load_model_config
 from app.prompts.planner import PROMPT as PLANNER_PROMPT
 from app.repositories.agent_runs import update_agent_run_planner_decision
 from app.repositories.projects import get_project
-from app.infrastructure.llm.service import call_llm, stream_event_type_var, stream_queue_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import (
+    CHAT_STREAM,
+    buffer_llm_stream,
+    flush_buffered_stream,
+    publish_status,
+    publish_text,
+    stream_event_type_var,
+)
 
 AVAILABLE_AGENTS = [
     "researcher",
@@ -27,7 +35,6 @@ AVAILABLE_AGENTS = [
     "editor",
     "fact_checker",
 ]
-
 
 def build_planner_context(state: AgentOrchestrationState, project: Dict[str, Any]) -> str:
     project_ctx = state["projectContext"]
@@ -76,9 +83,7 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     project_id = state["projectId"]
     thinking = "[Planner] Analyzing user request...\n"
 
-    q = stream_queue_var.get(None)
-    if q:
-        q.put({"event": "agent_status", "text": "Planner is analyzing your request..."})
+    publish_status("Planner is analyzing your request...")
 
     project = get_project(project_id)
     planner_context = build_planner_context(state, project)
@@ -167,6 +172,51 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
             ))
 
     thinking += f"[Planner] Intent: {planner_output['intent']} | needsAgents: {needs_agents}\n"
+
+    if not needs_agents:
+        publish_status("Planner is answering directly...")
+        fallback_direct_response = (
+            planner_output.get("directResponse")
+            or planner_output.get("userVisibleSummary")
+            or "I'm ready to help. Could you clarify your request?"
+        )
+        direct_system_prompt = (
+            "You are Bookish, a helpful writing assistant. Answer the user's request directly. "
+            "Do not output JSON, tool calls, planner notes, or internal reasoning. "
+            "If the request is unrelated to the book project, answer it normally and briefly."
+        )
+        direct_user_prompt = f"""
+USER REQUEST:
+{state["userPrompt"]}
+
+PROJECT CONTEXT:
+{planner_context}
+
+Answer the user in plain text.
+""".strip()
+
+        token = stream_event_type_var.set(CHAT_STREAM)
+        try:
+            with buffer_llm_stream(CHAT_STREAM) as buffered:
+                direct_response = call_llm(
+                    provider=model["provider"],
+                    model_name=model["model_name"],
+                    api_key=model["api_key"],
+                    system_prompt=direct_system_prompt,
+                    user_prompt=direct_user_prompt,
+                    default_fallback=fallback_direct_response,
+                    base_url=model["base_url"],
+                )
+                if buffered.seen_tokens:
+                    flush_buffered_stream(buffered, CHAT_STREAM)
+                else:
+                    publish_text(direct_response, CHAT_STREAM)
+        finally:
+            stream_event_type_var.reset(token)
+
+        planner_output["directResponse"] = direct_response
+        planner_output["userVisibleSummary"] = direct_response
+        thinking += "[Planner] Direct response streamed to user.\n"
 
     state["plannerOutput"] = planner_output
     state["tasks"] = tasks

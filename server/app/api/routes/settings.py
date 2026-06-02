@@ -13,8 +13,12 @@ def save_settings(id: str, payload: UpdateSettingsPayload):
     project = get_project(id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
-    update_project_settings(id, payload.settings.dict())
-    return {"message": "Model routing configs committed successfully."}
+    settings = payload.settings.model_dump()
+    update_project_settings(id, settings)
+    return {
+        "message": "Model routing configs committed successfully.",
+        "settings": settings,
+    }
 
 @router.get("")
 def fetch_settings(id: str):

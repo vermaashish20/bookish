@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookProject, FactItem, CharacterBibleItem, CallbackItem } from '../types';
+import { BookProject, FactItem, CharacterBibleItem, CallbackItem } from '@/lib/types';
 
 interface AgentMemoryStoresProps {
   book: BookProject;

@@ -1,7 +1,10 @@
 'use client';
 
 import React from 'react';
-import { ChapterItem } from '../types';
+import { ChapterItem } from '@/lib/types';
+
+const isDisplayReadyChapter = (chapter: ChapterItem) =>
+  chapter.status === 'completed' || chapter.status === 'published';
 
 interface BookOutlineProps {
   chapters: ChapterItem[];
@@ -45,7 +48,7 @@ export default function BookOutline({ chapters, activeSection, setActiveSection,
             >
               <span className="truncate pr-1">Ch {ch.number}: {ch.title.split(':')[0]}</span>
               <span className={`w-2 h-2 rounded-full shrink-0 ${
-                ch.status === 'completed' ? 'bg-emerald-500' : 'bg-zinc-200'
+                isDisplayReadyChapter(ch) ? 'bg-emerald-500' : 'bg-zinc-200'
               }`} title={ch.status} />
             </button>
           ))}

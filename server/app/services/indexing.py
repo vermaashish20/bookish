@@ -5,12 +5,31 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
 from app.infrastructure.database.mongo import get_db
 from app.infrastructure.vector.store import COLLECTION_NAMES, delete_document, upsert_document
 
 logger = logging.getLogger(__name__)
+
+_INDEX_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chroma-index")
+
+
+def _submit_index_job(job_name: str, fn, *args, **kwargs) -> None:
+    """Run Chroma indexing off the request/agent path."""
+    def runner() -> None:
+        start = time.perf_counter()
+        try:
+            fn(*args, **kwargs)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info("[Indexing] %s completed in %.1fms", job_name, elapsed_ms)
+        except Exception:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception("[Indexing] %s failed after %.1fms", job_name, elapsed_ms)
+
+    _INDEX_EXECUTOR.submit(runner)
 
 
 def _attrs_text(attrs: Dict[str, Any], limit: int = 400) -> str:
@@ -116,6 +135,10 @@ def index_chapter(project_id: str, chapter_id: str) -> None:
     )
 
 
+def enqueue_index_chapter(project_id: str, chapter_id: str) -> None:
+    _submit_index_job("chapter:%s" % chapter_id, index_chapter, project_id, chapter_id)
+
+
 def index_character(project_id: str, character_id: str) -> None:
     doc = get_db().character_bible.find_one({"_id": character_id, "projectId": project_id})
     if not doc:
@@ -128,6 +151,10 @@ def index_character(project_id: str, character_id: str) -> None:
         source_name=doc.get("name", character_id),
         extra_metadata={"mongoCollection": "character_bible", "role": doc.get("role", "")},
     )
+
+
+def enqueue_index_character(project_id: str, character_id: str) -> None:
+    _submit_index_job("character:%s" % character_id, index_character, project_id, character_id)
 
 
 def index_entity(project_id: str, entity_id: str) -> None:
@@ -144,6 +171,10 @@ def index_entity(project_id: str, entity_id: str) -> None:
     )
 
 
+def enqueue_index_entity(project_id: str, entity_id: str) -> None:
+    _submit_index_job("entity:%s" % entity_id, index_entity, project_id, entity_id)
+
+
 def index_user_asset(project_id: str, asset_id: str, asset_type: str) -> None:
     doc = get_db().user_assets.find_one({"_id": asset_id, "projectId": project_id})
     if not doc:
@@ -157,6 +188,10 @@ def index_user_asset(project_id: str, asset_id: str, asset_type: str) -> None:
         source_name=doc.get("name", asset_id),
         extra_metadata={"mongoCollection": "user_assets", "assetType": asset_type},
     )
+
+
+def enqueue_index_user_asset(project_id: str, asset_id: str, asset_type: str) -> None:
+    _submit_index_job("asset:%s" % asset_id, index_user_asset, project_id, asset_id, asset_type)
 
 
 def index_artifact(artifact_id: str) -> None:
@@ -178,6 +213,10 @@ def index_artifact(artifact_id: str) -> None:
             "agentName": doc.get("agentName", ""),
         },
     )
+
+
+def enqueue_index_artifact(artifact_id: str) -> None:
+    _submit_index_job("artifact:%s" % artifact_id, index_artifact, artifact_id)
 
 
 def unindex(doc_id: str, collection_name: str) -> None:

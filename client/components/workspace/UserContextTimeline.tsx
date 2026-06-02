@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookProject, Asset } from '../types';
+import { BookProject, Asset } from '@/lib/types';
 
 interface UserContextTimelineProps {
   book: BookProject;

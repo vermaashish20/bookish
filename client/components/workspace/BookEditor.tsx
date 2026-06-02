@@ -1,7 +1,13 @@
 'use client';
 
 import React from 'react';
-import { BookProject, ChapterItem, FactItem } from '../types';
+import { BookProject, ChapterItem, FactItem } from '@/lib/types';
+
+const isDisplayReadyChapter = (chapter: ChapterItem) =>
+  chapter.status === 'completed' || chapter.status === 'published';
+
+const hasChapterContent = (chapter: ChapterItem) =>
+  Boolean((chapter.content ?? '').trim());
 
 interface BookEditorProps {
   book: BookProject;
@@ -61,8 +67,8 @@ export default function BookEditor({ book, activeSection, streamedDocumentText }
                   {book.chapters.map((ch: ChapterItem, idx: number) => (
                     <div key={ch.id} className="flex justify-between border-b border-dashed border-zinc-200 pb-0.5">
                       <span>Chapter {ch.number}: {ch.title}</span>
-                      <span className={ch.status === 'completed' ? 'text-zinc-900 font-semibold' : 'text-zinc-300 italic'}>
-                        {ch.status === 'completed' ? `${(idx + 1) * 12}` : 'Pending'}
+                      <span className={isDisplayReadyChapter(ch) ? 'text-zinc-900 font-semibold' : 'text-zinc-300 italic'}>
+                        {isDisplayReadyChapter(ch) ? `${(idx + 1) * 12}` : 'Pending'}
                       </span>
                     </div>
                   ))}
@@ -84,10 +90,10 @@ export default function BookEditor({ book, activeSection, streamedDocumentText }
                   <div key={ch.id} className="space-y-4">
                     <h2 className="text-center font-sans text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">Chapter {ch.number}</h2>
                     <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{ch.title}</h1>
-                    {ch.status === 'completed' || streamedDocumentText ? (
+                    {hasChapterContent(ch) || streamedDocumentText ? (
                       <div className="text-xs leading-relaxed space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                        <p className="indent-6 text-justify whitespace-pre-wrap">{ch.status === 'completed' ? ch.content : streamedDocumentText}</p>
-                        {ch.status === 'completed' && <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: {ch.status}</p>}
+                        <p className="indent-6 text-justify whitespace-pre-wrap">{hasChapterContent(ch) ? ch.content : streamedDocumentText}</p>
+                        {hasChapterContent(ch) && <p className="text-[10px] text-zinc-400 font-sans italic mt-10">Word count: {ch.wordCount} words · Status: {ch.status}</p>}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center p-12 border border-dashed border-zinc-200 rounded bg-zinc-50 font-sans text-center">

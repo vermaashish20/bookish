@@ -9,7 +9,8 @@ from datetime import datetime
 from app.agents.orchestration_state import AgentOrchestrationState
 from app.core.model_config import load_model_config
 from app.prompts.world_builder import CHARACTER_PROMPT, ENTITY_PROMPT
-from app.infrastructure.llm.service import call_llm, stream_queue_var, stream_event_type_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import publish_status, stream_event_type_var
 from app.repositories.artifacts import create_artifact
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.projects import get_project
@@ -55,9 +56,7 @@ def world_builder_node(state: AgentOrchestrationState) -> AgentOrchestrationStat
 
     thinking = f"[World Builder] Starting task: {current_task['task']}\n"
 
-    q = stream_queue_var.get()
-    if q:
-        q.put({"event": "agent_status", "text": "🌍 World Builder is creating world elements..."})
+    publish_status("World Builder is creating world elements...")
 
     state["tasks"][current_task_idx]["status"] = "running"
     state["tasks"][current_task_idx]["startedAt"] = datetime.utcnow().isoformat()

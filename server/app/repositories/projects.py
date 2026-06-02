@@ -4,23 +4,27 @@ from app.infrastructure.database.mongo import get_db
 from app.infrastructure.vector.store import delete_project_vectors
 
 from app.repositories.assets import get_project_assets
-from app.repositories.chapters import get_chapter_summaries
+from app.repositories.chapters import get_project_chapters
 from app.repositories.characters import get_project_characters
+from app.repositories.entities import get_project_entities
 from app.repositories.agent_runs import get_project_agent_runs
+from app.repositories.artifacts import get_project_artifacts
 
 
 def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     """
     Full project payload for the workspace view.
-    Uses get_chapter_summaries (no prose content) to keep the response lean.
+    Returns the workspace payload used by the frontend as source of truth.
     """
     p = get_project(project_id)
     if not p:
         return None
 
-    chapter_summaries = get_chapter_summaries(project_id)
+    chapters = get_project_chapters(project_id)
     characters = get_project_characters(project_id)
+    entities = get_project_entities(project_id)
     assets = get_project_assets(project_id)
+    artifacts = get_project_artifacts(project_id)
 
     tonality_key = str(p.get("tonality", "")).lower()
     tonality_scores = {
@@ -64,7 +68,22 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
                     decision_item["artifactContent"] = artifact.get("content", "")
             decision_log.append(decision_item)
 
-    has_published = any(c.get("status") == "published" for c in chapter_summaries)
+    entity_bible = [
+        {
+            "id": e.get("id") or e.get("_id"),
+            "name": e.get("name", "Unnamed Entity"),
+            "role": e.get("type", "entity"),
+            "type": e.get("type", "entity"),
+            "description": e.get("description", ""),
+            "arc": e.get("description", ""),
+            "activeChapters": [],
+            "attributes": e.get("attributes", {}),
+            "status": e.get("status", "draft"),
+        }
+        for e in entities
+    ]
+
+    has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
 
     return {
         "id":        p["_id"],
@@ -76,13 +95,13 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "status":    "Reviewing" if has_published else "Planning",
         "createdAt": p["createdAt"],
         "bookSummary": p.get("bookSummary", ""),
-        # Chapters contain number/title/summary/wordCount/status — no prose
-        "chapters":  chapter_summaries,
+        "chapters":  chapters,
         "assets":    assets,
+        "artifacts": artifacts,
         "settings":  p.get("settings", {}),
         "memory": {
             "factRegistry":    [],
-            "characterBible":  characters,
+            "characterBible":  characters + entity_bible,
             "callbackIndex":   [],    # kept for frontend schema compat; always empty now
             "tonalityFingerprint": {
                 "preset": p["tonality"],

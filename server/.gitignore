@@ -11,4 +11,5 @@ wheels/
 .env
 
 # Chroma vector store (local persistence)
-chroma_db/
+chroma_db/*
+chroma.sqlite3

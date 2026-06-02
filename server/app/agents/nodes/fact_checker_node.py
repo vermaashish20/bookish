@@ -7,7 +7,8 @@ from datetime import datetime
 from app.agents.orchestration_state import AgentOrchestrationState
 from app.core.model_config import load_model_config
 from app.prompts.fact_checker import PROMPT as FACT_CHECKER_PROMPT
-from app.infrastructure.llm.service import call_llm, stream_queue_var, stream_event_type_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import publish_status, stream_event_type_var
 from app.repositories.artifacts import create_artifact
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.projects import get_project
@@ -37,9 +38,7 @@ def fact_checker_node(state: AgentOrchestrationState) -> AgentOrchestrationState
 
     thinking = f"[Fact-Checker] Starting audit: {current_task['task']}\n"
 
-    q = stream_queue_var.get()
-    if q:
-        q.put({"event": "agent_status", "text": "🧐 Fact-Checker is auditing the draft..."})
+    publish_status("Fact-Checker is auditing the draft...")
 
     state["tasks"][current_task_idx]["status"] = "running"
     state["tasks"][current_task_idx]["startedAt"] = datetime.utcnow().isoformat()
@@ -159,11 +158,7 @@ DRAFT TO AUDIT:
     thinking += f"[Fact-Checker] Report saved: {artifact_id}\n"
 
     # Surface result to user via stream (non-blocking)
-    if q:
-        q.put({
-            "event": "agent_status",
-            "text": "✅ Fact-check audit complete. Review the artifact in the Agent Flow trace.",
-        })
+    publish_status("Fact-check audit complete. Review the artifact in the Agent Flow trace.")
 
     state["factCheckReport"] = report_content
     state["artifactIds"].append(artifact_id)

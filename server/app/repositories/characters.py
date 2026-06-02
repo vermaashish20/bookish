@@ -3,13 +3,14 @@ from typing import Any, Dict, List
 from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
-from app.services.indexing import index_character
+from app.services.indexing import enqueue_index_character
+from app.agents.streaming import publish_sync_event
 
 
 def add_character(project_id: str, name: str, role: str, arc: str, active_chapters: List[int], attributes: Dict[str, Any], status: str = "draft"):
     db = get_db()
     char_id = f"character_{ObjectId()}"
-    db.character_bible.insert_one({
+    character = {
         "_id": char_id,
         "id": char_id,
         "projectId": project_id,
@@ -19,8 +20,10 @@ def add_character(project_id: str, name: str, role: str, arc: str, active_chapte
         "activeChapters": active_chapters,
         "attributes": attributes,
         "status": status,  # "draft" or "published"
-    })
-    index_character(project_id, char_id)
+    }
+    db.character_bible.insert_one(character)
+    enqueue_index_character(project_id, char_id)
+    publish_sync_event("memory_upserted", item=character)
     return char_id
 
 
@@ -65,4 +68,8 @@ def update_character(
         )
         doc = db.character_bible.find_one({"_id": character_id}, {"projectId": 1})
         if doc:
-            index_character(doc["projectId"], character_id)
+            enqueue_index_character(doc["projectId"], character_id)
+            updated = db.character_bible.find_one({"_id": character_id})
+            if updated:
+                updated["id"] = updated["_id"]
+                publish_sync_event("memory_upserted", item=updated)

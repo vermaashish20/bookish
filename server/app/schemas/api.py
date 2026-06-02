@@ -5,7 +5,10 @@ class SettingsModel(BaseModel):
     plannerModel: Dict[str, Any] = Field(default_factory=dict)
     writerModel: Dict[str, Any] = Field(default_factory=dict)
     factCheckerModel: Dict[str, Any] = Field(default_factory=dict)
-    humanizerModel: Optional[Dict[str, Any]] = None
+    humanizerModel: Dict[str, Any] = Field(default_factory=dict)
+    researcherModel: Dict[str, Any] = Field(default_factory=dict)
+    editorModel: Dict[str, Any] = Field(default_factory=dict)
+    worldBuilderModel: Dict[str, Any] = Field(default_factory=dict)
 
 class CreateProjectPayload(BaseModel):
     title: str

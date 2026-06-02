@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { DecisionItem } from '../types';
+import { DecisionItem } from '@/lib/types';
 
 interface ExecutionTimelineProps {
   decisionLog: DecisionItem[];

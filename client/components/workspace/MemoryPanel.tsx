@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookProject } from '../types';
+import { BookProject } from '@/lib/types';
 import UserContextTimeline from './UserContextTimeline';
 import AgentMemoryStores from './AgentMemoryStores';
 import ExecutionTimeline from './ExecutionTimeline';

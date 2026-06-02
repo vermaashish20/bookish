@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import SettingsPanel from '../components/SettingsPanel';
+import SettingsPanel from '@/components/workspace/SettingsPanel';
 
-type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'Nvidia' | 'Custom';
+type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'OpenRouter' | 'Sarvam' | 'Nvidia' | 'Custom';
 
 interface SettingsTabProps {
   plannerProvider: ProviderType;
@@ -40,6 +40,10 @@ interface SettingsTabProps {
   setGeminiKey: (value: string) => void;
   openaiKey: string;
   setOpenaiKey: (value: string) => void;
+  openrouterKey: string;
+  setOpenrouterKey: (value: string) => void;
+  sarvamKey: string;
+  setSarvamKey: (value: string) => void;
   nvidiaKey: string;
   setNvidiaKey: (value: string) => void;
   ollamaEndpoint: string;

@@ -2,7 +2,9 @@
 Agent Orchestration Graph
 """
 import logging
+import time
 from datetime import datetime
+from typing import Callable
 
 from langgraph.graph import END, StateGraph
 
@@ -22,6 +24,35 @@ logger = logging.getLogger(__name__)
 
 # Graph node names = agent names + finalize
 _GRAPH_ROUTES = {*ALLOWED_TASK_AGENTS, "finalize"}
+
+
+def timed_node(
+    node_name: str,
+    node_fn: Callable[[AgentOrchestrationState], AgentOrchestrationState],
+) -> Callable[[AgentOrchestrationState], AgentOrchestrationState]:
+    """Log wall-clock time for each graph node execution."""
+    def wrapped(state: AgentOrchestrationState) -> AgentOrchestrationState:
+        run_id = state.get("agentRunId", "unknown")
+        task_index = state.get("currentTaskIndex", 0)
+        task = ""
+        tasks = state.get("tasks", [])
+        if task_index < len(tasks):
+            task = tasks[task_index].get("task", "")
+
+        start = time.perf_counter()
+        try:
+            return node_fn(state)
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info(
+                "[AgentTiming] node=%s run_id=%s elapsed=%.1fms task=%s",
+                node_name,
+                run_id,
+                elapsed_ms,
+                task[:120],
+            )
+
+    return wrapped
 
 
 def should_continue_tasks(state: AgentOrchestrationState) -> str:
@@ -89,6 +120,7 @@ def _build_finalize_message(state: AgentOrchestrationState) -> tuple[str, str]:
 def finalize_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     """Compose final chat response and close the agent run."""
     thinking = "[Orchestrator] Finalizing execution...\n"
+    planner_output = state.get("plannerOutput")
 
     final_response, run_status = _build_finalize_message(state)
 
@@ -132,14 +164,14 @@ def build_orchestration_graph():
     """
     workflow = StateGraph(AgentOrchestrationState)
 
-    workflow.add_node("planner", planner_node)
-    workflow.add_node("researcher", researcher_node)
-    workflow.add_node("writer", writer_node)
-    workflow.add_node("fact_checker", fact_checker_node)
-    workflow.add_node("humanizer", humanizer_node)
-    workflow.add_node("editor", editor_node)
-    workflow.add_node("world_builder", world_builder_node)
-    workflow.add_node("finalize", finalize_node)
+    workflow.add_node("planner", timed_node("planner", planner_node))
+    workflow.add_node("researcher", timed_node("researcher", researcher_node))
+    workflow.add_node("writer", timed_node("writer", writer_node))
+    workflow.add_node("fact_checker", timed_node("fact_checker", fact_checker_node))
+    workflow.add_node("humanizer", timed_node("humanizer", humanizer_node))
+    workflow.add_node("editor", timed_node("editor", editor_node))
+    workflow.add_node("world_builder", timed_node("world_builder", world_builder_node))
+    workflow.add_node("finalize", timed_node("finalize", finalize_node))
 
     workflow.set_entry_point("planner")
 

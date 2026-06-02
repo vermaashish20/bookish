@@ -1,24 +1,22 @@
 """
 LLM Service — Central gateway for all Large Language Model interactions.
-Supports OpenAI, Anthropic/Claude, Ollama, NVIDIA, and custom OpenAI-compatible endpoints.
+Supports OpenAI, Anthropic/Claude, Ollama, NVIDIA, OpenRouter, Sarvam, and custom OpenAI-compatible endpoints.
 Supports real-time streaming to the active request queue via contextvars.
 """
 import httpx
-import contextvars
 import json
 import logging
-from typing import Optional
+import time
 
 from app.core.telemetry import langfuse_context, observe
+from app.agents.streaming import (
+    publish_stream_token,
+    stream_queue_var,
+)
 
 logger = logging.getLogger(__name__)
 
-# Context variable to hold the active request's SSE queue
-stream_queue_var      = contextvars.ContextVar("stream_queue_var",      default=None)
-stream_event_type_var = contextvars.ContextVar("stream_event_type_var", default="token")
-
-
-class LLMService:
+class LLMService: 
     @staticmethod
     def call(
         provider: str,
@@ -43,6 +41,10 @@ class LLMService:
                 return LLMService._call_ollama(model_name, api_key, system_prompt, user_prompt)
             elif provider_lower == "nvidia":
                 return LLMService._call_nvidia(model_name, api_key, system_prompt, user_prompt)
+            elif provider_lower == "openrouter":
+                return LLMService._call_openrouter(model_name, api_key, system_prompt, user_prompt)
+            elif provider_lower == "sarvam":
+                return LLMService._call_sarvam(model_name, api_key, system_prompt, user_prompt)
             elif provider_lower == "custom":
                 return LLMService._call_custom(model_name, api_key, system_prompt, user_prompt, base_url)
             else:
@@ -58,7 +60,7 @@ class LLMService:
 
     @staticmethod
     def _stream_openai_compat(url: str, payload: dict, headers: dict) -> str:
-        """Shared streaming loop for OpenAI-compatible APIs (OpenAI, NVIDIA, Custom)."""
+        """Shared streaming loop for OpenAI-compatible APIs."""
         q = stream_queue_var.get()
         payload["stream"] = True
         full_content = ""
@@ -77,8 +79,7 @@ class LLMService:
                     token = json.loads(data_str)["choices"][0]["delta"].get("content", "")
                     if token:
                         full_content += token
-                        if q is not None:
-                            q.put({"event": stream_event_type_var.get(), "text": token})
+                        publish_stream_token(token)
                 except Exception:
                     pass
         logger.debug("[LLMService] Stream complete: %d chars", len(full_content))
@@ -132,7 +133,7 @@ class LLMService:
                             token = chunk["delta"].get("text", "")
                             if token:
                                 full_content += token
-                                q.put({"event": stream_event_type_var.get(), "text": token})
+                                publish_stream_token(token)
                     except Exception:
                         pass
             return full_content
@@ -163,7 +164,7 @@ class LLMService:
                         token = json.loads(line).get("message", {}).get("content", "")
                         if token:
                             full_content += token
-                            q.put({"event": stream_event_type_var.get(), "text": token})
+                            publish_stream_token(token)
                     except Exception:
                         pass
             return full_content
@@ -218,6 +219,57 @@ class LLMService:
         res.raise_for_status()
         return res.json()["choices"][0]["message"]["content"]
 
+    @staticmethod
+    def _call_openrouter(model: str, api_key: str, system: str, user: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://localhost:3000",
+            "X-OpenRouter-Title": "Bookish",
+        }
+        payload = {
+            "model": model or "openai/gpt-4o-mini",
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "temperature": 0.3,
+        }
+        q = stream_queue_var.get()
+        if q is not None:
+            return LLMService._stream_openai_compat(
+                "https://openrouter.ai/api/v1/chat/completions", payload, headers
+            )
+        payload["stream"] = False
+        res = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=60.0,
+        )
+        res.raise_for_status()
+        return res.json()["choices"][0]["message"]["content"]
+
+    @staticmethod
+    def _call_sarvam(model: str, api_key: str, system: str, user: str) -> str:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": model or "sarvam-105b",
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "temperature": 0.3,
+        }
+        q = stream_queue_var.get()
+        if q is not None:
+            return LLMService._stream_openai_compat(
+                "https://api.sarvam.ai/v1/chat/completions", payload, headers
+            )
+        payload["stream"] = False
+        res = httpx.post(
+            "https://api.sarvam.ai/v1/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=60.0,
+        )
+        res.raise_for_status()
+        return res.json()["choices"][0]["message"]["content"]
+
 
 @observe(as_type="generation")
 def call_llm(
@@ -230,20 +282,34 @@ def call_llm(
     base_url: str = "",
 ) -> str:
     """Thin wrapper around LLMService.call with Langfuse observation."""
+    start = time.perf_counter()
     langfuse_context.update_current_observation(
         name=f"llm-call-{provider.lower()}",
         input={"system_prompt": system_prompt, "user_prompt": user_prompt},
         model=model_name,
         metadata={"provider": provider, "endpoint_url": base_url},
     )
-    response = LLMService.call(
-        provider=provider,
-        model_name=model_name,
-        api_key=api_key,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        default_fallback=default_fallback,
-        base_url=base_url,
-    )
-    langfuse_context.update_current_observation(output=response)
-    return response
+    try:
+        response = LLMService.call(
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            default_fallback=default_fallback,
+            base_url=base_url,
+        )
+        return response
+    finally:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        output = locals().get("response", "")
+        logger.info(
+            "[LLM] provider=%s model=%s elapsed=%.1fms prompt_chars=%d response_chars=%d",
+            provider,
+            model_name,
+            elapsed_ms,
+            len(system_prompt) + len(user_prompt),
+            len(output or ""),
+        )
+        if "response" in locals():
+            langfuse_context.update_current_observation(output=response)

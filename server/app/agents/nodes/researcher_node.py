@@ -15,7 +15,8 @@ from app.core.model_config import load_model_config
 from app.prompts.researcher import PROMPT as RESEARCHER_PROMPT
 from app.repositories.artifacts import create_artifact
 from app.repositories.projects import get_project
-from app.infrastructure.llm.service import call_llm, stream_event_type_var, stream_queue_var
+from app.infrastructure.llm.service import call_llm
+from app.agents.streaming import publish_status, stream_event_type_var
 
 
 @observe()
@@ -28,9 +29,7 @@ def researcher_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
     project_id = state["projectId"]
     thinking = f"[Researcher] Starting task: {current_task['task']}\n"
 
-    q = stream_queue_var.get(None)
-    if q:
-        q.put({"event": "agent_status", "text": "Researcher is gathering context..."})
+    publish_status("Researcher is gathering context...")
 
     task_idx, exec_idx = begin_task(state, "researcher", current_task["task"])
 

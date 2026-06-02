@@ -3,7 +3,22 @@ from typing import Any, Dict, List
 from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
-from app.services.indexing import index_entity, unindex
+from app.services.indexing import enqueue_index_entity, unindex
+from app.agents.streaming import publish_sync_event
+
+
+def _entity_memory_payload(entity: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": entity.get("id") or entity.get("_id"),
+        "name": entity.get("name", "Unnamed Entity"),
+        "role": entity.get("type", "entity"),
+        "type": entity.get("type", "entity"),
+        "description": entity.get("description", ""),
+        "arc": entity.get("description", ""),
+        "activeChapters": [],
+        "attributes": entity.get("attributes", {}),
+        "status": entity.get("status", "draft"),
+    }
 
 
 def add_entity(
@@ -17,7 +32,7 @@ def add_entity(
     """Add a new entity (place, object, organization, etc.) to the world bible"""
     db = get_db()
     entity_id = f"entity_{ObjectId()}"
-    db.entity_bible.insert_one({
+    entity = {
         "_id": entity_id,
         "id": entity_id,
         "projectId": project_id,
@@ -26,8 +41,10 @@ def add_entity(
         "description": description,
         "attributes": attributes,
         "status": status,
-    })
-    index_entity(project_id, entity_id)
+    }
+    db.entity_bible.insert_one(entity)
+    enqueue_index_entity(project_id, entity_id)
+    publish_sync_event("memory_upserted", item=_entity_memory_payload(entity))
     return entity_id
 
 
@@ -71,11 +88,18 @@ def update_entity(
         )
         doc = db.entity_bible.find_one({"_id": entity_id}, {"projectId": 1})
         if doc:
-            index_entity(doc["projectId"], entity_id)
+            enqueue_index_entity(doc["projectId"], entity_id)
+            updated = db.entity_bible.find_one({"_id": entity_id})
+            if updated:
+                updated["id"] = updated["_id"]
+                publish_sync_event("memory_upserted", item=_entity_memory_payload(updated))
 
 
 def delete_entity(entity_id: str):
     """Delete an entity"""
     db = get_db()
+    existing = db.entity_bible.find_one({"_id": entity_id}, {"_id": 1})
     db.entity_bible.delete_one({"_id": entity_id})
     unindex(entity_id, "world_system")
+    if existing:
+        publish_sync_event("memory_deleted", id=entity_id)
