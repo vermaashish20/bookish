@@ -25,10 +25,22 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
   const [newAssetType, setNewAssetType] = useState('Markdown File');
   const [selectedAssetFile, setSelectedAssetFile] = useState<File | null>(null);
 
-  const { book, setBook, updateBook, chatMessages, setChatMessages, loading } =
+  const {
+    book,
+    setBook,
+    updateBook,
+    chatMessages,
+    setChatMessages,
+    chatSessions,
+    activeChatSessionId,
+    switchChatSession,
+    startNewChatSession,
+    clearActiveChatSession,
+    loading,
+  } =
     useProject(projectId);
 
-  const chat = useChatStream(book, chatMessages, setChatMessages, setBook);
+  const chat = useChatStream(book, chatMessages, setChatMessages, setBook, activeChatSessionId);
 
   const settings = useModelSettings(projectId, book, updateBook, activeTab === 'Settings');
 
@@ -149,6 +161,11 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               pendingConfirmation={chat.pendingConfirmation}
               onResume={chat.resume}
               streamedDocumentText={chat.streamedDocumentText}
+              chatSessions={chatSessions}
+              activeChatSessionId={activeChatSessionId}
+              onSwitchChatSession={switchChatSession}
+              onNewChatSession={startNewChatSession}
+              onClearChatSession={clearActiveChatSession}
             />
           )}
           {activeTab === 'Book' && (

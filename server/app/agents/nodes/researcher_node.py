@@ -6,6 +6,7 @@ from app.core.telemetry import observe
 from app.agents.orchestration_state import AgentOrchestrationState
 from app.agents.runtime import (
     complete_task_and_advance,
+    format_source_assets,
     get_current_task,
     begin_task,
     resolve_task_context,
@@ -49,7 +50,10 @@ BOOK CONTEXT:
   Title:    {project_ctx.get('title', 'Untitled')}
   Genre:    {project_ctx.get('genre', 'Unknown')}
   Tone:     {project_ctx.get('tonality', 'Unknown')}
+  Formal memory entries: {project_ctx.get('characterCount', 0)} characters/entities
   Chapters: {project_ctx.get('chapterCount', 0)}
+
+{format_source_assets(project_ctx)}
 
 STORY SO FAR:
 {book_summary}
@@ -80,6 +84,9 @@ STORY SO FAR:
             },
             fallback_content=fallback_content,
             thinking_prefix="[Researcher] ",
+            run_id=state["agentRunId"],
+            agent_name="researcher",
+            task_name=current_task["task"],
         )
     finally:
         stream_event_type_var.reset(token)

@@ -8,6 +8,7 @@ import type {
   SettingsResponse,
 } from '@/lib/types/api';
 import type { BookProject } from '@/lib/types';
+import type { ChatSession } from '@/lib/types/project';
 
 export const fetchProjects = () =>
   request<BookProject[]>(endpoints.projects.list);
@@ -50,8 +51,20 @@ export const uploadAssetFile = (id: string, file: File, type?: string) => {
   });
 };
 
-export const fetchProjectMessages = (id: string) =>
-  request<unknown[]>(endpoints.projects.messages(id));
+export const fetchProjectMessages = (id: string, sessionId?: string) =>
+  request<unknown[]>(endpoints.projects.messages(id, sessionId));
+
+export const fetchChatSessions = (id: string) =>
+  request<ChatSession[]>(endpoints.projects.chatSessions(id));
+
+export const createChatSession = (id: string) =>
+  request<ChatSession>(endpoints.projects.chatSessions(id), { method: 'POST' });
+
+export const clearChatSessionMessages = (id: string, sessionId: string) =>
+  request<{ status: string; sessionId: string; deleted: number }>(
+    endpoints.projects.clearChatSession(id, sessionId),
+    { method: 'DELETE' },
+  );
 
 export const resumeAgent = (id: string, runId: string, response: string) =>
   request<{ status: string; response: string }>(endpoints.projects.resume(id), {

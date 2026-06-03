@@ -5,6 +5,7 @@ Reads draftContent from state; writes humanizedContent (and updates draftContent
 from datetime import datetime
 
 from app.agents.orchestration_state import AgentOrchestrationState
+from app.agents.runtime import format_source_assets, run_react_loop
 from app.core.model_config import load_model_config
 from app.prompts.humanizer import PROMPT as HUMANIZER_PROMPT
 from app.infrastructure.llm.service import call_llm
@@ -78,6 +79,9 @@ BOOK CONTEXT:
   Title:  {project_ctx.get('title', 'Untitled')}
   Genre:  {project_ctx.get('genre', 'Unknown')}
   Tone:   {project_ctx.get('tonality', 'Unknown')}
+  Formal memory entries: {project_ctx.get('characterCount', 0)} characters/entities
+
+{format_source_assets(project_ctx)}
 
 TEXT TO HUMANIZE:
 {source_text}
@@ -85,19 +89,30 @@ TEXT TO HUMANIZE:
 
     token = stream_event_type_var.set("document_stream")
     try:
-        humanized_content = call_llm(
-            provider=model["provider"],
-            model_name=model["model_name"],
-            api_key=model["api_key"],
+        react = run_react_loop(
+            project_id=project_id,
             system_prompt=HUMANIZER_PROMPT,
-            user_prompt=context_block,
-            default_fallback=source_text,  # safe fallback: return input unchanged
-            base_url=model["base_url"],
+            base_user_prompt=context_block,
+            call_llm=call_llm,
+            llm_kwargs={
+                "provider": model["provider"],
+                "model_name": model["model_name"],
+                "api_key": model["api_key"],
+                "default_fallback": source_text,
+                "base_url": model["base_url"],
+            },
+            fallback_content=source_text,
+            thinking_prefix="[Humanizer] ",
+            run_id=state["agentRunId"],
+            agent_name="humanizer",
+            task_name=current_task["task"],
         )
     finally:
         stream_event_type_var.reset(token)
 
+    humanized_content = react.content or source_text
     word_count = len(humanized_content.split())
+    thinking += react.thinking
     thinking += f"[Humanizer] Complete. Word count: {word_count}\n"
 
     artifact_id = create_artifact(

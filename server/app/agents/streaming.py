@@ -17,7 +17,13 @@ import threading
 from contextlib import contextmanager
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Union
 
-from app.core.telemetry import langfuse_context, observe
+from app.core.telemetry import (
+    langfuse_attributes,
+    langfuse_observation,
+    observe,
+    preview_text,
+    update_observation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -119,27 +125,28 @@ STREAM_HEADERS = {
 _FAST_DIRECT_MAX_CHARS = 220
 _AGENT_WORK_RE = re.compile(
     r"\b("
-    r"write|draft|chapter|scene|outline|plot|story|book|novel|character|entity|world|"
+    r"write|draft|chapter|scene|outline|plot|story|storey|book|novel|character|entity|world|"
     r"research|fact[- ]?check|edit|revise|humanize|polish|memory|remember|save|persist|"
-    r"finali[sz]e|publish|artifact|agent|planner|writer|timeline|bible|upload|attachment"
+    r"finali[sz]e|publish|artifact|agent|planner|writer|timeline|bible|upload|attachment|"
+    r"asset|assets|assest|assests|source|brief|context|project|guideline|guidelines|"
+    r"initial|given|provided|look|see|check|verify|confirm"
     r")\b",
     re.IGNORECASE,
 )
 _SIMPLE_DIRECT_RE = re.compile(
-    r"^\s*(hi|hello|hey|thanks|thank you|what|where|when|who|why|how|is|are|can|could|"
-    r"tell me|explain|define)\b",
+    r"^\s*(hi|hello|hey|thanks|thank you|ok|okay)\s*[!.]?\s*$",
     re.IGNORECASE,
 )
 
 
 def should_fast_direct_response(prompt: str) -> bool:
-    """Route obvious conversational prompts directly to chat for low-latency UX."""
+    """Route only trivial non-project chatter directly to chat."""
     text = (prompt or "").strip()
     if not text or len(text) > _FAST_DIRECT_MAX_CHARS:
         return False
     if _AGENT_WORK_RE.search(text):
         return False
-    return bool(_SIMPLE_DIRECT_RE.search(text)) or text.endswith("?")
+    return bool(_SIMPLE_DIRECT_RE.search(text))
 
 
 def publish_event(event: StreamEvent) -> None:
@@ -284,16 +291,37 @@ def run_direct_chat_in_thread(q: queue.Queue, initial_state: dict) -> None:
     prompt = initial_state["userPrompt"]
     _debug_stream("direct_chat_thread_start", run_id=run_id, project_id=project_id)
     try:
-        publish_status("Answering directly...")
-        project = get_project(project_id) or {}
-        model = load_model_config(project, "plannerModel")
-        project_context = initial_state.get("projectContext", {})
-        system_prompt = (
-            "You are Bookish, a helpful writing assistant. Answer the user's prompt directly. "
-            "Do not output JSON, hidden reasoning, tool calls, or planner notes. "
-            "Keep the answer clear and concise unless the user asks for detail."
-        )
-        user_prompt = f"""
+        with langfuse_attributes(
+            session_id=project_id,
+            trace_name="bookish-direct-chat",
+            tags=["bookish", "agentic-system", "direct-chat"],
+            metadata={"projectId": project_id, "runId": run_id},
+        ), langfuse_observation(
+            name="bookish-direct-chat",
+            as_type="agent",
+            input={
+                "projectId": project_id,
+                "runId": run_id,
+                "promptPreview": preview_text(prompt),
+                "promptChars": len(prompt or ""),
+                "mode": "direct_chat",
+            },
+            metadata={"projectId": project_id, "runId": run_id, "mode": "direct_chat"},
+        ) as run_observation:
+            try:
+                publish_status("Answering directly...")
+                project = get_project(project_id) or {}
+                model = load_model_config(project, "plannerModel")
+                project_context = initial_state.get("projectContext", {})
+                system_prompt = (
+                    "You are Bookish, a helpful writing assistant. Answer the user's prompt directly. "
+                    "Do not output JSON, hidden reasoning, tool calls, or planner notes. "
+                    "Keep the answer clear and concise unless the user asks for detail. "
+                    "If the answer depends on project facts, source assets, chapters, characters, "
+                    "world details, or artifacts, do not guess from chat memory; say you need to "
+                    "check project data with the agent tools."
+                )
+                user_prompt = f"""
 USER PROMPT:
 {prompt}
 
@@ -305,44 +333,56 @@ Tone: {project_context.get("tonality", "Unknown")}
 Answer the user in plain text.
 """.strip()
 
-        response = call_llm(
-            provider=model["provider"],
-            model_name=model["model_name"],
-            api_key=model["api_key"],
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            default_fallback="I'm ready to help. Could you clarify your request?",
-            base_url=model["base_url"],
-        )
-        final_message_id = add_chat_message(
-            project_id=project_id,
-            role="assistant",
-            content=response,
-            agent_run_id=run_id,
-        )
-        complete_agent_run(
-            run_id=run_id,
-            final_message_id=final_message_id,
-            status="completed",
-        )
-        publish_event({
-            "event": "done",
-            "reply": response,
-            "thinking": "[Direct Chat] Fast path completed.\n",
-            "projectState": get_unified_project_payload(project_id),
-        })
-    except Exception as exc:
-        _debug_stream("direct_chat_thread_error", run_id=run_id, error=str(exc))
-        logger.error("[DirectChat] Execution failed: %s", exc, exc_info=True)
-        fail_agent_run(run_id, str(exc))
-        publish_event({"event": "error", "error": str(exc)})
+                response = call_llm(
+                    provider=model["provider"],
+                    model_name=model["model_name"],
+                    api_key=model["api_key"],
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    default_fallback="I'm ready to help. Could you clarify your request?",
+                    base_url=model["base_url"],
+                )
+                final_message_id = add_chat_message(
+                    project_id=project_id,
+                    role="assistant",
+                    content=response,
+                    agent_run_id=run_id,
+                    session_id=initial_state.get("chatSessionId"),
+                )
+                complete_agent_run(
+                    run_id=run_id,
+                    final_message_id=final_message_id,
+                    status="completed",
+                )
+                update_observation(
+                    run_observation,
+                    output={"replyPreview": preview_text(response), "responseChars": len(response or "")},
+                    metadata={"projectId": project_id, "runId": run_id, "status": "completed"},
+                )
+                publish_event({
+                    "event": "done",
+                    "reply": response,
+                    "thinking": "[Direct Chat] Fast path completed.\n",
+                    "projectState": get_unified_project_payload(project_id),
+                })
+            except Exception as exc:
+                _debug_stream("direct_chat_thread_error", run_id=run_id, error=str(exc))
+                logger.error("[DirectChat] Execution failed: %s", exc, exc_info=True)
+                fail_agent_run(run_id, str(exc))
+                update_observation(
+                    run_observation,
+                    level="ERROR",
+                    status_message=str(exc),
+                    metadata={"projectId": project_id, "runId": run_id, "status": "failed"},
+                )
+                publish_event({"event": "error", "error": str(exc)})
     finally:
         _debug_stream("direct_chat_thread_finish", run_id=run_id, remaining_queue=q.qsize())
         stream_event_type_var.reset(event_token)
         stream_queue_var.reset(token)
 
 
-@observe()
+@observe(name="bookish-agent-orchestration")
 def run_graph_in_thread(q: queue.Queue, initial_state: dict) -> None:
     """Run the orchestration graph in a background thread with SSE context."""
     from app.agents.orchestration_graph import new_orchestration_graph
@@ -351,50 +391,94 @@ def run_graph_in_thread(q: queue.Queue, initial_state: dict) -> None:
     from app.repositories.chat_messages import add_chat_message
     from app.repositories.projects import get_unified_project_payload
 
-    langfuse_context.update_current_trace(
-        session_id=initial_state["projectId"],
-        name="bookish-agent-orchestration",
-    )
     token = stream_queue_var.set(q)
     run_id = initial_state["agentRunId"]
+    project_id = initial_state["projectId"]
+    prompt = initial_state.get("userPrompt", "")
     _debug_stream("graph_thread_start", run_id=run_id, project_id=initial_state.get("projectId"))
-    try:
-        publish_status("Starting agent run...")
-        result_state = new_orchestration_graph.invoke(initial_state)
-        _debug_stream("graph_thread_done", run_id=run_id, status=result_state.get("status"))
-        project_payload = get_unified_project_payload(result_state["projectId"])
-        publish_event({
-            "event": "done",
-            "reply": result_state.get("finalResponse", "Task completed."),
-            "thinking": "\n".join(result_state.get("thinking_logs", [])),
-            "projectState": project_payload,
-        })
-    except RunAbortedError as exc:
-        _debug_stream("graph_thread_aborted", run_id=run_id, error=str(exc))
-        logger.info("[Graph] Run aborted by user: %s", exc)
-        fail_agent_run(run_id, str(exc))
-        msg_id = add_chat_message(
-            project_id=initial_state["projectId"],
-            role="assistant",
-            content="Run cancelled - you rejected the proposed plan.",
-            agent_run_id=run_id,
-        )
-        publish_event({
-            "event": "done",
-            "reply": "Run cancelled.",
-            "thinking": "",
-            "projectState": get_unified_project_payload(initial_state["projectId"]),
-            "cancelled": True,
-            "messageId": msg_id,
-        })
-    except Exception as exc:
-        _debug_stream("graph_thread_error", run_id=run_id, error=str(exc))
-        logger.error("[Graph] Execution failed: %s", exc, exc_info=True)
-        fail_agent_run(run_id, str(exc))
-        publish_event({"event": "error", "error": str(exc)})
-    finally:
-        _debug_stream("graph_thread_finish", run_id=run_id, remaining_queue=q.qsize())
-        stream_queue_var.reset(token)
+    with langfuse_attributes(
+        session_id=project_id,
+        trace_name="bookish-agent-orchestration",
+        tags=["bookish", "agentic-system", "langgraph"],
+        metadata={"projectId": project_id, "runId": run_id},
+    ), langfuse_observation(
+        name="bookish-agent-orchestration",
+        as_type="agent",
+        input={
+            "projectId": project_id,
+            "runId": run_id,
+            "promptPreview": preview_text(prompt),
+            "promptChars": len(prompt or ""),
+            "mode": "graph",
+            "taskCount": len(initial_state.get("tasks", [])),
+        },
+        metadata={"projectId": project_id, "runId": run_id, "mode": "graph"},
+    ) as run_observation:
+        try:
+            publish_status("Starting agent run...")
+            result_state = new_orchestration_graph.invoke(initial_state)
+            _debug_stream("graph_thread_done", run_id=run_id, status=result_state.get("status"))
+            project_payload = get_unified_project_payload(result_state["projectId"])
+            final_response = result_state.get("finalResponse", "Task completed.")
+            update_observation(
+                run_observation,
+                output={
+                    "status": result_state.get("status"),
+                    "finalResponsePreview": preview_text(final_response),
+                    "tasks": result_state.get("tasks", []),
+                    "artifactIds": result_state.get("artifactIds", []),
+                },
+                metadata={
+                    "projectId": project_id,
+                    "runId": run_id,
+                    "status": result_state.get("status", "completed"),
+                    "artifactCount": len(result_state.get("artifactIds", [])),
+                },
+            )
+            publish_event({
+                "event": "done",
+                "reply": final_response,
+                "thinking": "\n".join(result_state.get("thinking_logs", [])),
+                "projectState": project_payload,
+            })
+        except RunAbortedError as exc:
+            _debug_stream("graph_thread_aborted", run_id=run_id, error=str(exc))
+            logger.info("[Graph] Run aborted by user: %s", exc)
+            fail_agent_run(run_id, str(exc))
+            update_observation(
+                run_observation,
+                level="WARNING",
+                status_message=str(exc),
+                metadata={"projectId": project_id, "runId": run_id, "status": "aborted"},
+            )
+            msg_id = add_chat_message(
+                project_id=project_id,
+                role="assistant",
+                content="Run cancelled - you rejected the proposed plan.",
+                agent_run_id=run_id,
+                session_id=initial_state.get("chatSessionId"),
+            )
+            publish_event({
+                "event": "done",
+                "reply": "Run cancelled.",
+                "thinking": "",
+                "projectState": get_unified_project_payload(project_id),
+                "cancelled": True,
+                "messageId": msg_id,
+            })
+        except Exception as exc:
+            _debug_stream("graph_thread_error", run_id=run_id, error=str(exc))
+            logger.error("[Graph] Execution failed: %s", exc, exc_info=True)
+            fail_agent_run(run_id, str(exc))
+            update_observation(
+                run_observation,
+                level="ERROR",
+                status_message=str(exc),
+                metadata={"projectId": project_id, "runId": run_id, "status": "failed"},
+            )
+            publish_event({"event": "error", "error": str(exc)})
+    _debug_stream("graph_thread_finish", run_id=run_id, remaining_queue=q.qsize())
+    stream_queue_var.reset(token)
 
 
 async def stream_agent_run(initial_state: dict) -> AsyncIterator[str]:

@@ -141,6 +141,14 @@ export interface ChatMessage {
   tokens?: number;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messageCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export type PreviewItem = {
   type: 'user_asset' | 'fact' | 'character' | 'callback' | 'style' | 'timeline' | 'artifact';
   id: string;

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   BookProject,
   ChatMessage,
+  ChatSession,
   ChapterItem,
   DecisionItem,
   GeneratedArtifact,
@@ -51,6 +52,11 @@ interface AgentTabProps {
   pendingConfirmation: { text: string, run_id: string } | null;
   onResume: (decision: string) => void;
   streamedDocumentText?: string;
+  chatSessions: ChatSession[];
+  activeChatSessionId: string;
+  onSwitchChatSession: (sessionId: string) => void;
+  onNewChatSession: () => void;
+  onClearChatSession: () => void;
 }
 
 export default function AgentTab({
@@ -63,7 +69,12 @@ export default function AgentTab({
   onSendPrompt,
   pendingConfirmation,
   onResume,
-  streamedDocumentText
+  streamedDocumentText,
+  chatSessions,
+  activeChatSessionId,
+  onSwitchChatSession,
+  onNewChatSession,
+  onClearChatSession,
 }: AgentTabProps) {
   const [studioTab, setStudioTab] = useState<'Flow' | 'Preview'>('Flow');
   const [selectedPreviewPage, setSelectedPreviewPage] = useState(1);
@@ -118,6 +129,11 @@ export default function AgentTab({
         onSendPrompt={onSendPrompt}
         pendingConfirmation={pendingConfirmation}
         onResume={onResume}
+        chatSessions={chatSessions}
+        activeChatSessionId={activeChatSessionId}
+        onSwitchChatSession={onSwitchChatSession}
+        onNewChatSession={onNewChatSession}
+        onClearChatSession={onClearChatSession}
       />
 
       {/* Right Column (60%) - Dynamic Studio Viewer (Flow & Preview tabs) */}

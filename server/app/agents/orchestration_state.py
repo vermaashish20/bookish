@@ -44,6 +44,10 @@ class ProjectContext(TypedDict):
     title: str
     genre: str
     tonality: str
+    # Uploaded/typed source docs. These may contain story facts before they are
+    # promoted into formal character/world/chapter records.
+    assetCount: int
+    assetSummaries: List[Dict[str, Any]]
     characterCount: int
     chapterCount: int
     # Rolling ≤400-word synopsis of the story so far (updated by editor after each publish)
@@ -66,6 +70,7 @@ class AgentOrchestrationState(TypedDict):
     """
     # ── Input ─────────────────────────────────────────────────────────────────
     projectId: str
+    chatSessionId: str
     userMessageId: str
     userPrompt: str
 

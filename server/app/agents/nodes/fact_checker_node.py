@@ -5,6 +5,7 @@ Reads draftContent from state; writes factCheckReport to state.
 from datetime import datetime
 
 from app.agents.orchestration_state import AgentOrchestrationState
+from app.agents.runtime import format_source_assets, run_react_loop
 from app.core.model_config import load_model_config
 from app.prompts.fact_checker import PROMPT as FACT_CHECKER_PROMPT
 from app.infrastructure.llm.service import call_llm
@@ -12,8 +13,6 @@ from app.agents.streaming import publish_status, stream_event_type_var
 from app.repositories.artifacts import create_artifact
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.projects import get_project
-from app.repositories.characters import get_project_characters
-from app.infrastructure.vector.store import query_documents
 from app.core.telemetry import observe
 
 
@@ -72,40 +71,6 @@ def fact_checker_node(state: AgentOrchestrationState) -> AgentOrchestrationState
     )
     project_ctx = state["projectContext"]
 
-    # Character bible — include full attributes for consistency checks
-    characters = get_project_characters(project_id)
-    char_bible_block = ""
-    if characters:
-        lines = ["CHARACTER BIBLE:"]
-        for char in characters[:10]:
-            lines.append(f"  Name:   {char['name']}")
-            lines.append(f"  Role:   {char['role']}")
-            lines.append(f"  Arc:    {char.get('arc', 'N/A')}")
-            attrs = char.get("attributes") or char.get("bible") or {}
-            if attrs:
-                lines.append(f"  Attrs:  {str(attrs)[:200]}")
-            lines.append("")
-        char_bible_block = "\n".join(lines)
-
-    # Semantic grounding from vector DB
-    semantic_results = query_documents(
-        collection_name="world_system",
-        query_text=current_task["task"] or text_to_audit[:300],
-        project_id=project_id,
-        limit=5,
-    )
-    grounding_block = ""
-    if semantic_results:
-        lines = ["WORLD KNOWLEDGE (from RAG):"]
-        for idx, res in enumerate(semantic_results, 1):
-            source = res["metadata"].get("sourceName", "Context")
-            lines.append(f"  [{idx}] {source}:\n  {res['document'][:300]}")
-        grounding_block = "\n".join(lines)
-    else:
-        grounding_block = "WORLD KNOWLEDGE: No matching records found in vector DB."
-
-    thinking += f"[Fact-Checker] Grounding sources: {len(semantic_results)}\n"
-
     context_block = f"""
 TASK:
 {current_task['task']}
@@ -113,11 +78,10 @@ TASK:
 BOOK CONTEXT:
   Title:    {project_ctx.get('title', 'Untitled')}
   Genre:    {project_ctx.get('genre', 'Unknown')}
+  Formal memory entries: {project_ctx.get('characterCount', 0)} characters/entities
   Chapters: {project_ctx.get('chapterCount', 0)}
 
-{char_bible_block}
-
-{grounding_block}
+{format_source_assets(project_ctx)}
 
 DRAFT TO AUDIT:
 {text_to_audit}
@@ -129,18 +93,29 @@ DRAFT TO AUDIT:
 
     token = stream_event_type_var.set("hidden_stream")
     try:
-        report_content = call_llm(
-            provider=model["provider"],
-            model_name=model["model_name"],
-            api_key=model["api_key"],
+        react = run_react_loop(
+            project_id=project_id,
             system_prompt=FACT_CHECKER_PROMPT,
-            user_prompt=context_block,
-            default_fallback=default_report,
-            base_url=model["base_url"],
+            base_user_prompt=context_block,
+            call_llm=call_llm,
+            llm_kwargs={
+                "provider": model["provider"],
+                "model_name": model["model_name"],
+                "api_key": model["api_key"],
+                "default_fallback": default_report,
+                "base_url": model["base_url"],
+            },
+            fallback_content=default_report,
+            thinking_prefix="[Fact-Checker] ",
+            run_id=state["agentRunId"],
+            agent_name="fact_checker",
+            task_name=current_task["task"],
         )
     finally:
         stream_event_type_var.reset(token)
 
+    report_content = react.content or default_report
+    thinking += react.thinking
     thinking += "[Fact-Checker] Audit complete.\n"
 
     artifact_id = create_artifact(
@@ -151,7 +126,6 @@ DRAFT TO AUDIT:
         content=report_content,
         metadata={
             "task": current_task["task"],
-            "groundingSourcesCount": len(semantic_results),
         },
     )
 

@@ -130,6 +130,7 @@ def finalize_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
         content=final_response,
         agent_run_id=state["agentRunId"],
         artifact_references=state["artifactIds"],
+        session_id=state.get("chatSessionId"),
     )
 
     complete_agent_run(

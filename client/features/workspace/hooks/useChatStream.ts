@@ -95,6 +95,7 @@ export function useChatStream(
   chatMessages: ChatMessage[],
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setBook: React.Dispatch<React.SetStateAction<BookProject | null>>,
+  activeChatSessionId: string,
 ) {
   const [promptInput, setPromptInput] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
@@ -212,7 +213,7 @@ export function useChatStream(
       setPendingConfirmation(null);
 
       try {
-        await submitMessageStream(book.id, captured, (chunk: StreamEvent) => {
+        await submitMessageStream(book.id, captured, activeChatSessionId, (chunk: StreamEvent) => {
           if (STREAM_DEBUG) console.log('[SSE DEBUG] route_event', chunk);
           if (chunk.event === 'chat_message') {
             queueChatText(agentMsgId, chunk.text ?? '');
@@ -286,6 +287,7 @@ export function useChatStream(
       setChatMessages,
       setBook,
       stopTypewriter,
+      activeChatSessionId,
     ],
   );
 

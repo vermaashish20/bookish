@@ -10,7 +10,11 @@ export const endpoints = {
     },
     assets: (id: string) => `/api/projects/${id}/assets`,
     message: (id: string) => `/api/projects/${id}/message`,
-    messages: (id: string) => `/api/projects/${id}/messages`,
+    messages: (id: string, sessionId?: string) =>
+      `/api/projects/${id}/messages${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`,
+    chatSessions: (id: string) => `/api/projects/${id}/chat-sessions`,
+    clearChatSession: (id: string, sessionId: string) =>
+      `/api/projects/${id}/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
     resume: (id: string) => `/api/projects/${id}/resume`,
   },
 } as const;

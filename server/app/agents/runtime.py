@@ -12,8 +12,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from app.core.exceptions import RunAbortedError
 from app.agents.orchestration_state import AgentOrchestrationState, TaskStatus
 from app.core.parsing import extract_json
+from app.core.telemetry import langfuse_observation, preview_text, update_observation
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
-from app.services.retrieval import agentic_retrieve
+from app.knowledge.tools import execute_knowledge_tool
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,25 @@ def resolve_task_context(
     return f"PRIOR AGENT OUTPUT ({field}):\n{text}"
 
 
+def format_source_assets(project_ctx: Dict[str, Any]) -> str:
+    """Return a bounded source-asset summary for agent context blocks."""
+    asset_count = project_ctx.get("assetCount", 0)
+    assets = project_ctx.get("assetSummaries") or []
+    if not asset_count:
+        return "SOURCE ASSETS:\n  None attached."
+
+    lines = [
+        f"SOURCE ASSETS: {asset_count} attached. These may contain unpromoted canon; "
+        "use persistent source tools (`read_project_sources` / `read_user_asset`) for exact contents."
+    ]
+    for asset in assets:
+        lines.append(
+            f"  - {asset.get('name', 'Untitled asset')} "
+            f"({asset.get('type', 'unknown')}, id: {asset.get('id') or asset.get('_id')})"
+        )
+    return "\n".join(lines)
+
+
 def validate_planner_tasks(raw_tasks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
     Filter invalid agent names and ensure each task has required fields.
@@ -118,42 +138,42 @@ def validate_planner_tasks(raw_tasks: List[Dict[str, Any]]) -> Tuple[List[Dict[s
     return valid, warnings
 
 
-def execute_tool(project_id: str, tool_name: str, args: Dict[str, Any]) -> str:
+def execute_tool(
+    project_id: str,
+    tool_name: str,
+    args: Dict[str, Any],
+    *,
+    run_id: Optional[str] = None,
+    agent: Optional[str] = None,
+    task: Optional[str] = None,
+) -> str:
     """Run a single agent tool and return text for the ReAct history."""
-    if tool_name == "search_rag":
-        collection = args.get("collection", "world_system")
-        queries = args.get("queries", [])
-        if isinstance(queries, str):
-            queries = [queries]
-        return agentic_retrieve(project_id, queries, collection)
-
-    if tool_name == "read_chapter":
-        from app.repositories.chapters import get_chapter_content
-
-        chapter_id = args.get("chapter_id") or args.get("chapterId")
-        if not chapter_id:
-            number = args.get("number") or args.get("chapter_number")
-            if number is not None:
-                content = get_chapter_content(project_id, chapter_number=int(number))
-            else:
-                return "[read_chapter] Error: provide chapter_id or number."
-        else:
-            content = get_chapter_content(project_id, chapter_id=str(chapter_id))
-        if not content:
-            return "[read_chapter] Chapter not found."
-        max_len = int(args.get("max_chars", 8000))
-        if len(content) > max_len:
-            content = content[:max_len] + "\n...(truncated)"
-        return f"--- CHAPTER CONTENT ---\n{content}\n--- END ---"
-
-    if tool_name == "search_web":
-        query = args.get("query", "")
-        return (
-            f"[search_web] No live search configured for '{query}'. "
-            "Use search_rag for project knowledge."
+    with langfuse_observation(
+        name=f"kb-tool-{tool_name}",
+        as_type="tool",
+        input={
+            "tool": tool_name,
+            "arguments": args,
+            "projectId": project_id,
+            "runId": run_id,
+            "agent": agent,
+            "taskPreview": preview_text(task, max_chars=500),
+        },
+        metadata={"tool": tool_name, "agent": agent, "runId": run_id},
+    ) as observation:
+        result = execute_knowledge_tool(
+            project_id,
+            tool_name,
+            args,
+            run_id=run_id,
+            agent=agent,
+            task=task,
         )
-
-    return f"[Tool: {tool_name}] Unknown tool."
+        update_observation(
+            observation,
+            output={"preview": preview_text(result), "chars": len(result or "")},
+        )
+        return result
 
 
 @dataclass
@@ -173,6 +193,9 @@ def run_react_loop(
     fallback_content: str,
     thinking_prefix: str = "",
     use_type_discriminator: bool = False,
+    run_id: Optional[str] = None,
+    agent_name: Optional[str] = None,
+    task_name: Optional[str] = None,
 ) -> ReActResult:
     """
     Standard ReAct loop for planner (type=tool_call|final) and worker agents (tool_call key).
@@ -207,18 +230,37 @@ def run_react_loop(
         should_buffer_stream = stream_event_type != HIDDEN_STREAM
         buffered_tokens = None
 
-        if should_buffer_stream:
-            with buffer_llm_stream(stream_event_type) as buffered_tokens:
+        with langfuse_observation(
+            name=f"react-iteration-{agent_name or 'agent'}-{iteration}",
+            as_type="chain",
+            input={
+                "agent": agent_name,
+                "iteration": iteration,
+                "taskPreview": preview_text(task_name, max_chars=500),
+                "hasToolContext": bool(tool_context),
+                "streamEventType": stream_event_type,
+            },
+            metadata={"runId": run_id, "agent": agent_name, "iteration": iteration},
+        ) as iteration_observation:
+            if should_buffer_stream:
+                with buffer_llm_stream(stream_event_type) as buffered_tokens:
+                    last_response = call_llm(
+                        system_prompt=system_prompt,
+                        user_prompt=user_msg,
+                        **llm_kwargs,
+                    )
+            else:
                 last_response = call_llm(
                     system_prompt=system_prompt,
                     user_prompt=user_msg,
                     **llm_kwargs,
                 )
-        else:
-            last_response = call_llm(
-                system_prompt=system_prompt,
-                user_prompt=user_msg,
-                **llm_kwargs,
+            update_observation(
+                iteration_observation,
+                output={
+                    "responsePreview": preview_text(last_response),
+                    "responseChars": len(last_response or ""),
+                },
             )
 
         def flush_final_output() -> None:
@@ -256,7 +298,7 @@ def run_react_loop(
 
         if is_tool:
             thinking += f"Tool call: {tool_name} | args: {args}\n"
-            tool_context += f"\n{execute_tool(project_id, tool_name, args)}\n"
+            tool_context += f"\n{execute_tool(project_id, tool_name, args, run_id=run_id, agent=agent_name, task=task_name)}\n"
             continue
 
         thinking += "Final output received.\n"

@@ -15,13 +15,12 @@ from app.agents.runtime import (
 )
 from app.core.model_config import load_model_config
 from app.prompts.planner import PROMPT as PLANNER_PROMPT
+from app.repositories.chat_messages import get_recent_chat_messages
 from app.repositories.agent_runs import update_agent_run_planner_decision
 from app.repositories.projects import get_project
 from app.infrastructure.llm.service import call_llm
 from app.agents.streaming import (
     CHAT_STREAM,
-    buffer_llm_stream,
-    flush_buffered_stream,
     publish_status,
     publish_text,
     stream_event_type_var,
@@ -39,6 +38,11 @@ AVAILABLE_AGENTS = [
 def build_planner_context(state: AgentOrchestrationState, project: Dict[str, Any]) -> str:
     project_ctx = state["projectContext"]
     book_summary = project_ctx.get("bookSummary") or "The story has not started yet."
+    recent_messages = get_recent_chat_messages(
+        state["projectId"],
+        count=6,
+        session_id=state.get("chatSessionId"),
+    )
 
     chapter_summaries = project_ctx.get("chapterSummaries", [])
     if chapter_summaries:
@@ -54,6 +58,30 @@ def build_planner_context(state: AgentOrchestrationState, project: Dict[str, Any
     else:
         chapter_index = "  No chapters written yet."
 
+    asset_summaries = project_ctx.get("assetSummaries", [])
+    if asset_summaries:
+        asset_lines = []
+        for asset in asset_summaries:
+            asset_lines.append(
+                f"  - {asset.get('name', 'Untitled asset')} "
+                f"({asset.get('type', 'unknown')}, id: {asset.get('id') or asset.get('_id')})"
+            )
+        source_assets = "\n".join(asset_lines)
+    else:
+        source_assets = "  No source assets attached."
+
+    if recent_messages:
+        chat_lines = []
+        for msg in recent_messages:
+            role = msg.get("role", "unknown")
+            content = (msg.get("content") or "").strip()
+            if len(content) > 500:
+                content = content[:500] + "..."
+            chat_lines.append(f"  {role}: {content}")
+        recent_chat = "\n".join(chat_lines)
+    else:
+        recent_chat = "  No prior messages in this chat session."
+
     return f"""
 USER REQUEST:
 {state["userPrompt"]}
@@ -62,8 +90,15 @@ BOOK METADATA:
   Title:      {project_ctx.get("title", "Untitled")}
   Genre:      {project_ctx.get("genre", "Unknown")}
   Tone:       {project_ctx.get("tonality", "Unknown")}
-  Characters: {project_ctx.get("characterCount", 0)}
+  Source assets: {project_ctx.get("assetCount", 0)}
+  Formal memory entries: {project_ctx.get("characterCount", 0)} characters/entities
   Chapters:   {project_ctx.get("chapterCount", 0)}
+
+SOURCE ASSETS (bounded list; use KB tools for contents):
+{source_assets}
+
+RECENT CHAT IN THIS SESSION (intent context only; never source of factual truth):
+{recent_chat}
 
 STORY SO FAR (rolling summary):
 {book_summary}
@@ -105,7 +140,9 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
             project_id=project_id,
             system_prompt=system_prompt,
             base_user_prompt=(
-                "Analyze the user request from the context above and produce your JSON output."
+                "Use the USER REQUEST in the provided context as the only user request. "
+                "If project data is needed and no tool result is present, call a Knowledge Base tool. "
+                "Otherwise produce the required JSON object."
             ),
             call_llm=call_llm,
             llm_kwargs={
@@ -118,6 +155,9 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
             fallback_content=fallback_json,
             thinking_prefix="[Planner] ",
             use_type_discriminator=True,
+            run_id=state["agentRunId"],
+            agent_name="planner",
+            task_name=state["userPrompt"],
         )
     finally:
         stream_event_type_var.reset(token)
@@ -175,42 +215,15 @@ def planner_node(state: AgentOrchestrationState) -> AgentOrchestrationState:
 
     if not needs_agents:
         publish_status("Planner is answering directly...")
-        fallback_direct_response = (
+        direct_response = (
             planner_output.get("directResponse")
             or planner_output.get("userVisibleSummary")
             or "I'm ready to help. Could you clarify your request?"
         )
-        direct_system_prompt = (
-            "You are Bookish, a helpful writing assistant. Answer the user's request directly. "
-            "Do not output JSON, tool calls, planner notes, or internal reasoning. "
-            "If the request is unrelated to the book project, answer it normally and briefly."
-        )
-        direct_user_prompt = f"""
-USER REQUEST:
-{state["userPrompt"]}
-
-PROJECT CONTEXT:
-{planner_context}
-
-Answer the user in plain text.
-""".strip()
 
         token = stream_event_type_var.set(CHAT_STREAM)
         try:
-            with buffer_llm_stream(CHAT_STREAM) as buffered:
-                direct_response = call_llm(
-                    provider=model["provider"],
-                    model_name=model["model_name"],
-                    api_key=model["api_key"],
-                    system_prompt=direct_system_prompt,
-                    user_prompt=direct_user_prompt,
-                    default_fallback=fallback_direct_response,
-                    base_url=model["base_url"],
-                )
-                if buffered.seen_tokens:
-                    flush_buffered_stream(buffered, CHAT_STREAM)
-                else:
-                    publish_text(direct_response, CHAT_STREAM)
+            publish_text(direct_response, CHAT_STREAM)
         finally:
             stream_event_type_var.reset(token)
 

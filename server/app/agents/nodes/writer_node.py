@@ -7,6 +7,7 @@ from app.agents.orchestration_state import AgentOrchestrationState
 from app.agents.runtime import (
     begin_task,
     complete_task_and_advance,
+    format_source_assets,
     get_current_task,
     resolve_task_context,
     run_react_loop,
@@ -76,6 +77,9 @@ BOOK CONTEXT:
   Title:  {project_ctx.get('title', 'Untitled')}
   Genre:  {project_ctx.get('genre', 'Unknown')}
   Tone:   {project_ctx.get('tonality', 'Unknown')}
+  Formal memory entries: {project_ctx.get('characterCount', 0)} characters/entities
+
+{format_source_assets(project_ctx)}
 
 {char_block}
 
@@ -111,6 +115,9 @@ Write engaging prose. Target 500–1000 words. Follow the project's voice, genre
             },
             fallback_content=fallback_content,
             thinking_prefix="[Writer] ",
+            run_id=state["agentRunId"],
+            agent_name="writer",
+            task_name=current_task["task"],
         )
     finally:
         stream_event_type_var.reset(token)

@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 
 from app.agents.orchestration_state import AgentOrchestrationState
+from app.agents.runtime import format_source_assets, run_react_loop, wait_for_hitl
 from app.core.model_config import load_model_config
 from app.prompts.world_builder import CHARACTER_PROMPT, ENTITY_PROMPT
 from app.infrastructure.llm.service import call_llm
@@ -90,28 +91,44 @@ BOOK CONTEXT:
   Title:      {project_ctx.get('title', 'Untitled')}
   Genre:      {project_ctx.get('genre', 'Unknown')}
   Tone:       {project_ctx.get('tonality', 'Unknown')}
-  Characters: {project_ctx.get('characterCount', 0)} existing
+  Formal memory entries: {project_ctx.get('characterCount', 0)} characters/entities
   Chapters:   {project_ctx.get('chapterCount', 0)}
 
+{format_source_assets(project_ctx)}
+
 Create a detailed {entity_type} bible entry that fits this project. Output valid JSON only.
+
+If existing project knowledge is needed first, output a Knowledge Base tool call JSON such as:
+{{"tool_call": "retrieve_knowledge", "arguments": {{"mode": "persistent", "surface": "source_assets", "operation": "read", "maxResults": 5, "max_chars": 20000, "max_chars_per_asset": 8000}}}}
 """.strip()
 
     fallback_content = json.dumps({"name": "Placeholder", "description": "Configure API key."})
 
     token = stream_event_type_var.set("document_stream")
     try:
-        entity_json_raw = call_llm(
-            provider=model["provider"],
-            model_name=model["model_name"],
-            api_key=model["api_key"],
+        react = run_react_loop(
+            project_id=project_id,
             system_prompt=system_prompt,
-            user_prompt=context_block,
-            default_fallback=fallback_content,
-            base_url=model["base_url"],
+            base_user_prompt=context_block,
+            call_llm=call_llm,
+            llm_kwargs={
+                "provider": model["provider"],
+                "model_name": model["model_name"],
+                "api_key": model["api_key"],
+                "default_fallback": fallback_content,
+                "base_url": model["base_url"],
+            },
+            fallback_content=fallback_content,
+            thinking_prefix="[World Builder] ",
+            run_id=state["agentRunId"],
+            agent_name="world_builder",
+            task_name=current_task["task"],
         )
     finally:
         stream_event_type_var.reset(token)
 
+    entity_json_raw = react.content or fallback_content
+    thinking += react.thinking
     thinking += f"[World Builder] LLM response received ({len(entity_json_raw)} chars).\n"
 
     # Parse JSON — strip markdown code fences if present
@@ -143,8 +160,6 @@ Create a detailed {entity_type} bible entry that fits this project. Output valid
         "entityData": entity_data,
         "artifactId": artifact_id,
     }
-
-    from app.agents.runtime import wait_for_hitl
 
     summary = (
         f"I've created a **{entity_type}** bible for "

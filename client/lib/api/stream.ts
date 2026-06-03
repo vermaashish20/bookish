@@ -11,6 +11,7 @@ const STREAM_DEBUG = process.env.NEXT_PUBLIC_STREAM_DEBUG === '1';
 export async function submitMessageStream(
   projectId: string,
   message: string,
+  sessionId: string,
   onEvent: (event: StreamEvent) => void,
 ): Promise<void> {
   const url = `${API_BASE_URL}${endpoints.projects.message(projectId)}`;
@@ -21,7 +22,7 @@ export async function submitMessageStream(
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, session_id: sessionId }),
   });
 
   if (STREAM_DEBUG) {

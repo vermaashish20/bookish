@@ -6,7 +6,7 @@ from typing import Dict, Any
 from app.agents.orchestration_state import AgentOrchestrationState, ProjectContext
 from app.repositories.projects import get_project, get_book_summary
 from app.repositories.chapters import get_chapter_summaries
-from app.repositories.chat_messages import add_chat_message
+from app.repositories.chat_messages import DEFAULT_CHAT_SESSION_ID, add_chat_message
 from app.repositories.agent_runs import create_agent_run
 from datetime import datetime
 from bson import ObjectId
@@ -40,6 +40,18 @@ def load_project_context(project_id: str) -> ProjectContext:
         + db.entity_bible.count_documents({"projectId": project_id})
     )
 
+    # Source assets are not "formal memory", but they often contain the user's
+    # outline, characters, plot notes, and rules before agents promote them.
+    asset_count = db.user_assets.count_documents({"projectId": project_id})
+    asset_summaries = list(
+        db.user_assets.find(
+            {"projectId": project_id},
+            {"_id": 1, "name": 1, "type": 1, "size": 1, "addedAt": 1},
+        ).sort("addedAt", 1).limit(10)
+    )
+    for asset in asset_summaries:
+        asset["id"] = asset["_id"]
+
     # Lightweight chapter index — no content field
     chapter_summaries = get_chapter_summaries(project_id)
 
@@ -51,6 +63,8 @@ def load_project_context(project_id: str) -> ProjectContext:
         title=project.get("title", ""),
         genre=project.get("genre", ""),
         tonality=project.get("tonality", ""),
+        assetCount=asset_count,
+        assetSummaries=asset_summaries,
         characterCount=character_count,
         chapterCount=len(chapter_summaries),
         bookSummary=book_summary,
@@ -63,6 +77,7 @@ def initialize_orchestration_state(
     project_id: str,
     user_prompt: str,
     *,
+    chat_session_id: str = DEFAULT_CHAT_SESSION_ID,
     skip_hitl: bool = False,
 ) -> AgentOrchestrationState:
     """
@@ -73,14 +88,16 @@ def initialize_orchestration_state(
     user_message_id = add_chat_message(
         project_id=project_id,
         role="user",
-        content=user_prompt
+        content=user_prompt,
+        session_id=chat_session_id,
     )
     
     # Create agent run record
     agent_run_id = create_agent_run(
         project_id=project_id,
         user_message_id=user_message_id,
-        user_prompt=user_prompt
+        user_prompt=user_prompt,
+        session_id=chat_session_id,
     )
     
     # Load project context
@@ -90,6 +107,7 @@ def initialize_orchestration_state(
     state = AgentOrchestrationState(
         # Input
         projectId=project_id,
+        chatSessionId=chat_session_id,
         userMessageId=user_message_id,
         userPrompt=user_prompt,
         

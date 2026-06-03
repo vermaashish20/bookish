@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { ChatMessage } from '@/lib/types';
+import { ChatMessage, ChatSession } from '@/lib/types';
 
 interface ChatInterfaceProps {
   chatMessages: ChatMessage[];
@@ -12,6 +12,11 @@ interface ChatInterfaceProps {
   onSendPrompt: (e: React.FormEvent) => void;
   pendingConfirmation?: { text: string, run_id: string } | null;
   onResume?: (decision: string) => void;
+  chatSessions: ChatSession[];
+  activeChatSessionId: string;
+  onSwitchChatSession: (sessionId: string) => void;
+  onNewChatSession: () => void;
+  onClearChatSession: () => void;
 }
 
 export default function ChatInterface({
@@ -22,7 +27,12 @@ export default function ChatInterface({
   setPromptInput,
   onSendPrompt,
   pendingConfirmation,
-  onResume
+  onResume,
+  chatSessions,
+  activeChatSessionId,
+  onSwitchChatSession,
+  onNewChatSession,
+  onClearChatSession
 }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +43,45 @@ export default function ChatInterface({
 
   return (
     <div className="w-[40%] flex flex-col justify-between bg-white border-r border-zinc-200 overflow-hidden shrink-0">
+      <div className="border-b border-zinc-100 bg-white px-4 py-3">
+        <div className="flex items-center gap-2">
+          <select
+            value={activeChatSessionId}
+            onChange={(event) => onSwitchChatSession(event.target.value)}
+            disabled={isAgentThinking}
+            className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-[11px] font-medium text-zinc-700 outline-none focus:border-zinc-400 disabled:opacity-50"
+            title="Current chat session"
+          >
+            {chatSessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.title || 'Chat'} ({session.id === activeChatSessionId ? chatMessages.length : session.messageCount ?? 0})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onNewChatSession}
+            disabled={isAgentThinking}
+            className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            title="Start a fresh chat session"
+          >
+            New
+          </button>
+          <button
+            type="button"
+            onClick={onClearChatSession}
+            disabled={isAgentThinking || chatMessages.length === 0}
+            className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
+            title="Clear this chat session only"
+          >
+            Clear
+          </button>
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400">
+          Chat sessions only reset conversation display. Project memory stays in assets, chapters, and KB tools.
+        </p>
+      </div>
+
       {/* Chat Message Stream */}
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
         {chatMessages.length === 0 && (
@@ -79,15 +128,11 @@ export default function ChatInterface({
           );
         })}
 
-        {/* Agent thinking status */}
+        {/* Lightweight agent status metadata */}
         {isAgentThinking && (
-          <div className="flex gap-2.5 max-w-[85%]">
-            <div className="space-y-1 flex-1">
-              <div className="bg-zinc-50 border border-zinc-100 text-xs px-3 py-2.5 rounded-lg text-zinc-400 italic flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-ping shrink-0" />
-                {currentAgentStatus || "Running the orchestration graph for this request."}
-              </div>
-            </div>
+          <div className="flex items-center gap-1.5 px-1 text-[10px] italic text-zinc-400">
+            <span className="h-1 w-1 rounded-full bg-zinc-400 animate-pulse" />
+            <span>{currentAgentStatus || "Running the orchestration graph for this request."}</span>
           </div>
         )}
         

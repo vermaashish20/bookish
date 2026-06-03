@@ -8,7 +8,12 @@ import json
 import logging
 import time
 
-from app.core.telemetry import langfuse_context, observe
+from app.core.telemetry import (
+    langfuse_observation,
+    preview_text,
+    prompt_payload,
+    update_observation,
+)
 from app.agents.streaming import (
     publish_stream_token,
     stream_queue_var,
@@ -271,7 +276,6 @@ class LLMService:
         return res.json()["choices"][0]["message"]["content"]
 
 
-@observe(as_type="generation")
 def call_llm(
     provider: str,
     model_name: str,
@@ -283,33 +287,53 @@ def call_llm(
 ) -> str:
     """Thin wrapper around LLMService.call with Langfuse observation."""
     start = time.perf_counter()
-    langfuse_context.update_current_observation(
+    metadata = {
+        "provider": provider,
+        "endpointUrlConfigured": bool(base_url),
+        "hasApiKey": bool(api_key),
+        "systemChars": len(system_prompt or ""),
+        "userChars": len(user_prompt or ""),
+    }
+    with langfuse_observation(
         name=f"llm-call-{provider.lower()}",
-        input={"system_prompt": system_prompt, "user_prompt": user_prompt},
+        as_type="generation",
+        input=prompt_payload(system_prompt, user_prompt),
         model=model_name,
-        metadata={"provider": provider, "endpoint_url": base_url},
-    )
-    try:
-        response = LLMService.call(
-            provider=provider,
-            model_name=model_name,
-            api_key=api_key,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            default_fallback=default_fallback,
-            base_url=base_url,
-        )
-        return response
-    finally:
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        output = locals().get("response", "")
-        logger.info(
-            "[LLM] provider=%s model=%s elapsed=%.1fms prompt_chars=%d response_chars=%d",
-            provider,
-            model_name,
-            elapsed_ms,
-            len(system_prompt) + len(user_prompt),
-            len(output or ""),
-        )
-        if "response" in locals():
-            langfuse_context.update_current_observation(output=response)
+        model_parameters={"provider": provider},
+        metadata=metadata,
+    ) as observation:
+        try:
+            response = LLMService.call(
+                provider=provider,
+                model_name=model_name,
+                api_key=api_key,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                default_fallback=default_fallback,
+                base_url=base_url,
+            )
+            return response
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            output = locals().get("response", "")
+            logger.info(
+                "[LLM] provider=%s model=%s elapsed=%.1fms prompt_chars=%d response_chars=%d",
+                provider,
+                model_name,
+                elapsed_ms,
+                len(system_prompt) + len(user_prompt),
+                len(output or ""),
+            )
+            if "response" in locals():
+                update_observation(
+                    observation,
+                    output={
+                        "preview": preview_text(response),
+                        "responseChars": len(response or ""),
+                    },
+                    metadata={**metadata, "elapsedMs": round(elapsed_ms, 1)},
+                    usage_details={
+                        "input": max(1, (len(system_prompt or "") + len(user_prompt or "")) // 4),
+                        "output": max(1, len(response or "") // 4),
+                    },
+                )
