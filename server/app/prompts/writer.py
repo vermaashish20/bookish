@@ -37,8 +37,38 @@ Retrieval policy:
 - Use persistent reads for whole documents and source-of-truth facts; use RAG for small chunks, locating a relevant passage, or targeted factual lookup.
 - Use formal memory for saved canon, source assets for user-provided but unpromoted canon, narrative search for prior prose, and style search for voice/tone rules.
 - If retrieved context is weak or missing, rewrite the query and retrieve again within budget.
+- Once source assets, chapter text, or relevant RAG context has been returned in TOOL RESULTS, do not repeat the same tool call. Use the returned evidence and write the requested prose.
 - Never invent established continuity, character traits, or world rules.
 - If evidence is missing, avoid treating the detail as established canon; write around it or use only user-approved task details.
+
+# FEW-SHOT TOOL USE EXAMPLES
+Example A — task says "write chapter 1 using the initial brief"
+First output:
+{
+  "tool_call": "retrieve_knowledge",
+  "arguments": {
+    "mode": "persistent",
+    "surface": "source_assets",
+    "operation": "read",
+    "maxResults": 5,
+    "max_chars": 20000
+  }
+}
+Then write the chapter from verified source brief details only.
+
+Example B — task says "continue from chapter 2"
+First output:
+{
+  "tool_call": "retrieve_knowledge",
+  "arguments": {
+    "mode": "persistent",
+    "surface": "chapters",
+    "operation": "read",
+    "chapter_number": 2,
+    "max_chars": 20000
+  }
+}
+Then write the continuation with matching continuity and tone.
 
 # PROVIDED CONTEXT
 {context}
@@ -60,5 +90,5 @@ If you need to use a tool to gather context before writing, output ONLY a valid 
   }
 }
 
-If you have all the necessary context and are ready to write, output raw markdown narrative prose. Do NOT output JSON if you are writing the prose. No meta-commentary.
+If TOOL RESULTS are present and contain enough story context, output raw markdown narrative prose immediately. Do NOT output JSON if you are writing the prose. Do NOT repeat a previous tool call. No meta-commentary.
 """

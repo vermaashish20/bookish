@@ -4,7 +4,10 @@ import React from 'react';
 import { BookProject, ChapterItem, FactItem } from '@/lib/types';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
-  chapter.status === 'completed' || chapter.status === 'published';
+  Boolean((chapter.content ?? '').trim()) ||
+  chapter.status === 'draft' ||
+  chapter.status === 'completed' ||
+  chapter.status === 'published';
 
 const hasChapterContent = (chapter: ChapterItem) =>
   Boolean((chapter.content ?? '').trim());
@@ -88,7 +91,16 @@ export default function BookEditor({ book, activeSection, streamedDocumentText }
               if (activeSection === ch.id) {
                 return (
                   <div key={ch.id} className="space-y-4">
-                    <h2 className="text-center font-sans text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">Chapter {ch.number}</h2>
+                    <div className="flex items-center justify-center gap-2 font-sans text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                      <span>Chapter {ch.number}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[8px] ${
+                        ch.status === 'published' || ch.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {ch.status || 'draft'}
+                      </span>
+                    </div>
                     <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{ch.title}</h1>
                     {hasChapterContent(ch) || streamedDocumentText ? (
                       <div className="text-xs leading-relaxed space-y-4 max-h-[500px] overflow-y-auto pr-2">

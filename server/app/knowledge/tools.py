@@ -459,7 +459,9 @@ read_formal_memory,
 list_artifacts, read_artifact
 
 2) RAG / Chroma semantic search
-Use when you need small relevant chunks, semantic lookup, or a targeted passage.
+Use when you need small relevant child chunks, semantic lookup, or a targeted passage.
+RAG searches one Chroma collection (`project_knowledge`) and filters by `projectId` plus scope-derived `sourceKind`.
+Results include child chunk text plus parent/root metadata. Use persistent tools to read the full parent chapter/source/artifact.
 Preferred tool:
 {"tool_call":"retrieve_knowledge","arguments":{"mode":"rag","query":"specific thing to find","scopes":["assets","narrative","characters","world","plot","continuity","style","artifacts"],"maxResults":5}}
 

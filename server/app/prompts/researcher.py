@@ -43,6 +43,34 @@ Retrieval policy:
 - If context is still missing, state what is missing instead of inventing.
 - In the final report, separate verified facts from missing/unverified information.
 
+# FEW-SHOT TOOL USE EXAMPLES
+Example A — task asks for "initial plot, characters, and guidelines"
+First output:
+{
+  "tool_call": "retrieve_knowledge",
+  "arguments": {
+    "mode": "persistent",
+    "surface": "source_assets",
+    "operation": "read",
+    "maxResults": 5,
+    "max_chars": 20000
+  }
+}
+Then produce a report grouped as Verified Source Facts, Characters, World/Setting, Style Guidelines, and Gaps.
+
+Example B — task asks for "where was the ledger mentioned?"
+First output:
+{
+  "tool_call": "retrieve_knowledge",
+  "arguments": {
+    "mode": "rag",
+    "query": "ledger mentioned",
+    "scopes": ["assets", "chapters", "continuity"],
+    "intent": "research",
+    "maxResults": 5
+  }
+}
+
 # PROVIDED CONTEXT
 {context}
 

@@ -51,8 +51,9 @@ stream_event_type_var = contextvars.ContextVar[str](
 class GuardedStreamBuffer:
     """Buffer initial LLM tokens until they are safe to expose to the UI."""
 
-    def __init__(self, event_type: str) -> None:
+    def __init__(self, event_type: str, *, auto_release: bool = True) -> None:
         self.event_type = event_type
+        self.auto_release = auto_release
         self.tokens: List[str] = []
         self.released = False
         self.seen_tokens = False
@@ -65,7 +66,7 @@ class GuardedStreamBuffer:
             return
 
         self.tokens.append(text)
-        if self._looks_user_visible():
+        if self.auto_release and self._looks_user_visible():
             _debug_stream(
                 "guard_release_user_visible",
                 event=self.event_type,
@@ -216,7 +217,11 @@ def publish_text(text: str, event_type: Optional[str] = None, *, chunk_size: int
 
 
 @contextmanager
-def buffer_llm_stream(event_type: Optional[str] = None) -> Iterator[GuardedStreamBuffer]:
+def buffer_llm_stream(
+    event_type: Optional[str] = None,
+    *,
+    auto_release: bool = True,
+) -> Iterator[GuardedStreamBuffer]:
     """
     Capture LLM tokens without emitting them immediately.
 
@@ -224,7 +229,7 @@ def buffer_llm_stream(event_type: Optional[str] = None) -> Iterator[GuardedStrea
     tool call or final user-visible text.
     """
     selected_event = event_type or stream_event_type_var.get()
-    buffered_tokens = GuardedStreamBuffer(selected_event)
+    buffered_tokens = GuardedStreamBuffer(selected_event, auto_release=auto_release)
     event_token = stream_event_type_var.set(selected_event)
     buffer_token = stream_buffer_var.set(buffered_tokens)
     try:

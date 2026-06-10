@@ -14,6 +14,8 @@ MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "bookish")
 
 CHROMA_DIR = os.getenv("CHROMA_DIR", str(SERVER_ROOT / "chroma_db"))
 
+PROJECT_KNOWLEDGE_COLLECTION = os.getenv("PROJECT_KNOWLEDGE_COLLECTION", "project_knowledge")
+
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 
 # Embeddings: default = local ONNX (Chroma DefaultEmbeddingFunction)

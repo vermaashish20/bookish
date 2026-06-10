@@ -1,17 +1,21 @@
 """
 Writer Node - Create narrative drafts and persist as chapters.
 """
+import json
+
 from app.core.telemetry import observe
 
 from app.agents.orchestration_state import AgentOrchestrationState
 from app.agents.runtime import (
     begin_task,
     complete_task_and_advance,
+    fail_task_and_advance,
     format_source_assets,
     get_current_task,
     resolve_task_context,
     run_react_loop,
 )
+from app.core.parsing import extract_json
 from app.core.model_config import load_model_config
 from app.prompts.writer import PROMPT as WRITER_PROMPT
 from app.repositories.artifacts import create_artifact
@@ -20,6 +24,17 @@ from app.repositories.characters import get_project_characters
 from app.repositories.projects import get_project
 from app.infrastructure.llm.service import call_llm
 from app.agents.streaming import publish_status, stream_event_type_var
+
+
+def _looks_like_tool_payload(content: str) -> bool:
+    text = (content or "").strip()
+    if not text:
+        return False
+    try:
+        parsed = json.loads(extract_json(text))
+    except Exception:
+        return False
+    return isinstance(parsed, dict) and "tool_call" in parsed
 
 
 @observe()
@@ -124,6 +139,14 @@ Write engaging prose. Target 500–1000 words. Follow the project's voice, genre
 
     thinking += react.thinking
     draft_content = react.content or fallback_content
+    if react.exhausted or _looks_like_tool_payload(draft_content):
+        error = (
+            "Writer did not produce prose. It repeatedly requested tools or returned a tool-call payload, "
+            "so no draft chapter was saved."
+        )
+        publish_status("Writer could not produce prose after retrieval. No chapter was saved.")
+        return fail_task_and_advance(state, task_idx, exec_idx, error, thinking + f"{error}\n")
+
     word_count = len(draft_content.split())
 
     artifact_id = create_artifact(

@@ -14,7 +14,10 @@ import AgentFlowTrace from '@/components/workspace/AgentFlowTrace';
 import PreviewCanvas from '@/components/workspace/PreviewCanvas';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
-  chapter.status === 'completed' || chapter.status === 'published';
+  Boolean((chapter.content ?? '').trim()) ||
+  chapter.status === 'draft' ||
+  chapter.status === 'completed' ||
+  chapter.status === 'published';
 
 const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content', 'humanized_content']);
 

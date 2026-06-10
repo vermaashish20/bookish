@@ -1,30 +1,26 @@
 """
-ChromaDB vector store — semantic search with real embeddings.
+Vector store — semantic search with real embeddings.
 
-Logical collections (agent-facing names):
-  chapters, characters, world_system, book_style_guide
+Prototype uses one logical collection:
+  project_knowledge
 
 MongoDB remains source of truth; vectors are indexed on write via services.indexing.
 """
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 import chromadb
 from chromadb.api.models.Collection import Collection
 
-from app.config import CHROMA_DIR
+from app.config import CHROMA_DIR, PROJECT_KNOWLEDGE_COLLECTION
 from app.infrastructure.vector.embeddings import get_embedding_function
 
 logger = logging.getLogger(__name__)
 
-COLLECTION_NAMES = frozenset({
-    "chapters",
-    "characters",
-    "world_system",
-    "book_style_guide",
-})
+COLLECTION_NAMES = frozenset({PROJECT_KNOWLEDGE_COLLECTION})
 
 _client: Optional[chromadb.PersistentClient] = None
 _collections: Dict[str, Collection] = {}
@@ -91,14 +87,39 @@ def upsert_document(
         "projectId": str(project_id),
     })
 
+    logger.info(
+        "[VectorIngestion] received collection=%s doc_id=%s project_id=%s sourceKind=%s chars=%s",
+        collection_name,
+        doc_id,
+        project_id,
+        meta.get("sourceKind", "unknown"),
+        len(text),
+    )
+    start = time.perf_counter()
     try:
         get_collection(collection_name).upsert(
             ids=[str(doc_id)],
             documents=[text],
             metadatas=[meta],
         )
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "[VectorIngestion] completed collection=%s doc_id=%s project_id=%s elapsed_ms=%.1f",
+            collection_name,
+            doc_id,
+            project_id,
+            elapsed_ms,
+        )
     except Exception as exc:
-        logger.error("Vector upsert failed (%s/%s): %s", collection_name, doc_id, exc)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.error(
+            "[VectorIngestion] failed collection=%s doc_id=%s project_id=%s elapsed_ms=%.1f error=%s",
+            collection_name,
+            doc_id,
+            project_id,
+            elapsed_ms,
+            exc,
+        )
 
 
 def delete_document(collection_name: str, doc_id: str) -> None:
@@ -113,6 +134,7 @@ def query_documents(
     query_text: str,
     project_id: str,
     limit: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Semantic search within a project.
@@ -123,11 +145,15 @@ def query_documents(
     if not query_text or collection_name not in COLLECTION_NAMES:
         return []
 
+    where_filter: Dict[str, Any] = {"projectId": str(project_id)}
+    if metadata_filter:
+        where_filter = {"$and": [where_filter, metadata_filter]}
+
     try:
         raw = get_collection(collection_name).query(
             query_texts=[query_text],
             n_results=limit,
-            where={"projectId": str(project_id)},
+            where=where_filter,
             include=["documents", "metadatas", "distances"],
         )
     except Exception as exc:
@@ -158,3 +184,20 @@ def delete_project_vectors(project_id: str) -> None:
             get_collection(name).delete(where={"projectId": pid})
         except Exception as exc:
             logger.warning("delete_project_vectors %s: %s", name, exc)
+
+
+def delete_document_chunks(collection_name: str, project_id: str, root_id: str) -> None:
+    """Remove all vector chunks for one Mongo/source document."""
+    if collection_name not in COLLECTION_NAMES:
+        return
+    try:
+        get_collection(collection_name).delete(
+            where={
+                "$and": [
+                    {"projectId": str(project_id)},
+                    {"rootId": str(root_id)},
+                ]
+            }
+        )
+    except Exception as exc:
+        logger.warning("delete_document_chunks %s/%s: %s", collection_name, root_id, exc)

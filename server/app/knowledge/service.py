@@ -9,7 +9,7 @@ from app.core.telemetry import langfuse_observation, update_observation
 from app.infrastructure.database.mongo import get_db
 from app.infrastructure.vector.store import query_documents
 from app.knowledge.schemas import KnowledgeHit, KnowledgeSearchResult
-from app.knowledge.scopes import collections_for_scopes, normalize_scopes
+from app.knowledge.scopes import collections_for_scopes, metadata_filter_for_scopes, normalize_scopes
 
 
 def _score_to_coverage(score: float, result_count: int) -> str:
@@ -72,6 +72,7 @@ def search_knowledge(
     """Search semantic knowledge by domain scope, not storage collection."""
     normalized_scopes = normalize_scopes(scopes)
     collections = collections_for_scopes(normalized_scopes)
+    metadata_filter = metadata_filter_for_scopes(normalized_scopes)
     clean_query = (query or "").strip()
     with langfuse_observation(
         name="kb-search-knowledge",
@@ -80,6 +81,7 @@ def search_knowledge(
             "query": clean_query,
             "scopes": normalized_scopes,
             "collections": collections,
+            "metadataFilter": metadata_filter,
             "intent": intent,
             "maxResults": max_results,
         },
@@ -91,7 +93,13 @@ def search_knowledge(
 
         if clean_query:
             for collection in collections:
-                for raw in query_documents(collection, clean_query, project_id, limit=per_collection_limit):
+                for raw in query_documents(
+                    collection,
+                    clean_query,
+                    project_id,
+                    limit=per_collection_limit,
+                    metadata_filter=metadata_filter,
+                ):
                     key = (collection, raw["id"])
                     if key in seen:
                         continue
@@ -163,7 +171,8 @@ def format_knowledge_result(result: KnowledgeSearchResult) -> str:
     """Format retrieval results for LLM context."""
     lines = [
         "--- KNOWLEDGE BASE CONTEXT (RAG / CHROMA SEMANTIC SEARCH) ---",
-        "Storage: Chroma indexed chunks. Use for targeted lookup, not full source-of-truth reads.",
+        "Storage: Chroma child chunks in project_knowledge, filtered by projectId/sourceKind.",
+        "Use RAG for targeted lookup. Use persistent Mongo tools for full parent records.",
         f"Query: {result['query']}",
         f"Scopes: {', '.join(result['scopes'])}",
         f"Coverage: {result['coverage']} | relevance: {result['relevance']:.2f}",
@@ -179,11 +188,18 @@ def format_knowledge_result(result: KnowledgeSearchResult) -> str:
     for idx, hit in enumerate(result["results"], 1):
         source = hit["metadata"].get("sourceName", hit["id"])
         mongo_collection = hit["metadata"].get("mongoCollection", "unknown")
+        source_kind = hit["metadata"].get("sourceKind", "unknown")
+        parent_id = hit["metadata"].get("parentId") or hit["metadata"].get("rootId") or hit["id"]
+        chunk_label = hit["metadata"].get("chunkIndex", "?")
         lines.append(
             f"\n[{idx}] scope={hit['scope']} collection={hit['collection']} "
-            f"source={source} mongo={mongo_collection} score={hit['score']:.2f}"
+            f"source={source} sourceKind={source_kind} mongo={mongo_collection} "
+            f"parent={parent_id} chunk={chunk_label} score={hit['score']:.2f}"
         )
         lines.append(hit["document"])
+        parent_preview = hit["metadata"].get("parentPreview")
+        if parent_preview and parent_preview != hit["document"]:
+            lines.append(f"\nParent context preview:\n{parent_preview}")
 
     lines.append("--- END KNOWLEDGE BASE CONTEXT ---")
     return "\n".join(lines)

@@ -4,7 +4,10 @@ import React from 'react';
 import { ChapterItem } from '@/lib/types';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
-  chapter.status === 'completed' || chapter.status === 'published';
+  Boolean((chapter.content ?? '').trim()) ||
+  chapter.status === 'draft' ||
+  chapter.status === 'completed' ||
+  chapter.status === 'published';
 
 interface BookOutlineProps {
   chapters: ChapterItem[];
@@ -47,9 +50,15 @@ export default function BookOutline({ chapters, activeSection, setActiveSection,
               }`}
             >
               <span className="truncate pr-1">Ch {ch.number}: {ch.title.split(':')[0]}</span>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${
-                isDisplayReadyChapter(ch) ? 'bg-emerald-500' : 'bg-zinc-200'
-              }`} title={ch.status} />
+              <span className={`rounded px-1.5 py-0.5 text-[8px] uppercase tracking-wide shrink-0 ${
+                ch.status === 'published' || ch.status === 'completed'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                  : isDisplayReadyChapter(ch)
+                    ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                    : 'bg-zinc-100 text-zinc-400 border border-zinc-100'
+              }`} title={ch.status}>
+                {ch.status || 'draft'}
+              </span>
             </button>
           ))}
         </div>

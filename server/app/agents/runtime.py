@@ -180,6 +180,7 @@ def execute_tool(
 class ReActResult:
     content: str
     thinking: str
+    exhausted: bool = False
 
 
 def run_react_loop(
@@ -207,6 +208,7 @@ def run_react_loop(
     tool_context = ""
     iteration = 0
     last_response = ""
+    seen_tool_calls: set[str] = set()
 
     while iteration < max_iterations:
         iteration += 1
@@ -243,7 +245,7 @@ def run_react_loop(
             metadata={"runId": run_id, "agent": agent_name, "iteration": iteration},
         ) as iteration_observation:
             if should_buffer_stream:
-                with buffer_llm_stream(stream_event_type) as buffered_tokens:
+                with buffer_llm_stream(stream_event_type, auto_release=False) as buffered_tokens:
                     last_response = call_llm(
                         system_prompt=system_prompt,
                         user_prompt=user_msg,
@@ -298,6 +300,16 @@ def run_react_loop(
 
         if is_tool:
             thinking += f"Tool call: {tool_name} | args: {args}\n"
+            tool_key = json.dumps({"tool": tool_name, "args": args}, sort_keys=True, default=str)
+            if tool_key in seen_tool_calls:
+                thinking += "Duplicate tool call ignored; asking agent to use existing tool results.\n"
+                tool_context += (
+                    "\n[Duplicate tool call ignored] You already called this tool with the same arguments. "
+                    "Use the existing tool results above and produce the final answer/content now. "
+                    "Do not repeat the same JSON tool call.\n"
+                )
+                continue
+            seen_tool_calls.add(tool_key)
             tool_context += f"\n{execute_tool(project_id, tool_name, args, run_id=run_id, agent=agent_name, task=task_name)}\n"
             continue
 
@@ -305,10 +317,11 @@ def run_react_loop(
         flush_final_output()
         return ReActResult(content=last_response, thinking=thinking)
 
-    thinking += "Max iterations reached; using last response.\n"
+    thinking += "Max iterations reached before final content; refusing to treat tool JSON as final output.\n"
     return ReActResult(
-        content=last_response or fallback_content,
+        content="",
         thinking=thinking,
+        exhausted=True,
     )
 
 

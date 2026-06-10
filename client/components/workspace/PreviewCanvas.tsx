@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChapterItem, DecisionItem } from '@/lib/types';
@@ -56,10 +56,15 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
   const shouldPaginate = ['Writer', 'Editor', 'Humanizer'].includes(currentAgent) || (!activePreviewArtifact && chapter);
 
   const previewChunks = shouldPaginate
-    ? (contentToDisplay.match(/[\s\S]{1,1200}/g) || [])
+    ? (contentToDisplay.match(/[\s\S]{1,2200}/g) || [])
     : [contentToDisplay];
 
   const previewPages = Array.from({ length: Math.max(previewChunks.length, 1) }, (_, idx) => idx + 1);
+  useEffect(() => {
+    if (selectedPage > previewPages.length) {
+      setSelectedPage(previewPages.length);
+    }
+  }, [previewPages.length, selectedPage, setSelectedPage]);
   const activePreviewContent = previewChunks[selectedPage - 1] || '';
 
   return (
@@ -142,7 +147,18 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
             <div className={shouldPaginate ? "space-y-4" : "flex-1 px-8 py-6"}>
               {activePreviewContent ? (
                 <div className="space-y-4 w-full max-w-full overflow-hidden">
-                  {!activePreviewArtifact && chapter && <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{chapter.title}</h1>}
+                  {!activePreviewArtifact && chapter && (
+                    <div className="mb-6 text-center">
+                      <h1 className="text-sm font-semibold leading-snug tracking-tight text-zinc-900">{chapter.title}</h1>
+                      <span className={`mt-2 inline-flex rounded px-2 py-0.5 font-sans text-[9px] uppercase tracking-wider ${
+                        chapter.status === 'published' || chapter.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {chapter.status || 'draft'}
+                      </span>
+                    </div>
+                  )}
                   <div className="text-justify leading-relaxed markdown-body prose prose-sm prose-zinc max-w-3xl mx-auto break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words">
                     <ReactMarkdown 
                       remarkPlugins={[remarkGfm]}

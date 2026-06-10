@@ -1,20 +1,46 @@
 """
-Index MongoDB documents into Chroma — single place for embedding writes.
+Index MongoDB documents into the project knowledge vector store.
 """
 from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 from app.infrastructure.database.mongo import get_db
-from app.infrastructure.vector.store import COLLECTION_NAMES, delete_document, upsert_document
+from app.config import PROJECT_KNOWLEDGE_COLLECTION
+from app.infrastructure.vector.store import (
+    COLLECTION_NAMES,
+    delete_document,
+    delete_document_chunks,
+    upsert_document,
+)
 
 logger = logging.getLogger(__name__)
 
 _INDEX_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chroma-index")
+
+CHILD_CHUNK_TOKENS = 260
+CHILD_CHUNK_OVERLAP = 50
+PARENT_CHUNK_TOKENS = 1200
+PARENT_PREVIEW_CHARS = 3000
+
+
+class IndexedChunk(TypedDict):
+    chunk_id: str
+    parent_id: str
+    parent_index: int
+    child_index: int
+    chunk_index: int
+    chunk_count: int
+    text: str
+    parent_preview: str
+    heading_path: str
+    start: int
+    end: int
 
 
 def _submit_index_job(job_name: str, fn, *args, **kwargs) -> None:
@@ -37,6 +63,162 @@ def _attrs_text(attrs: Dict[str, Any], limit: int = 400) -> str:
         return ""
     text = json.dumps(attrs, ensure_ascii=False)
     return text[:limit] + ("..." if len(text) > limit else "")
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\S+", text or ""))
+
+
+def _split_paragraphs(text: str) -> List[str]:
+    return [part.strip() for part in re.split(r"\n\s*\n+", text or "") if part.strip()]
+
+
+def _split_sentences(text: str) -> List[str]:
+    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text or "") if part.strip()]
+
+
+def _split_large_unit(text: str, max_tokens: int) -> List[str]:
+    if _word_count(text) <= max_tokens:
+        return [text.strip()]
+    sentences = _split_sentences(text)
+    if len(sentences) <= 1:
+        words = text.split()
+        return [" ".join(words[i:i + max_tokens]) for i in range(0, len(words), max_tokens)]
+
+    chunks: List[str] = []
+    current: List[str] = []
+    current_tokens = 0
+    for sentence in sentences:
+        sentence_tokens = _word_count(sentence)
+        if current and current_tokens + sentence_tokens > max_tokens:
+            chunks.append(" ".join(current).strip())
+            current = []
+            current_tokens = 0
+        current.append(sentence)
+        current_tokens += sentence_tokens
+    if current:
+        chunks.append(" ".join(current).strip())
+    return chunks
+
+
+def _split_parent_sections(text: str, max_tokens: int = PARENT_CHUNK_TOKENS) -> List[Dict[str, Any]]:
+    """Build larger parent chunks using headings, scene breaks, paragraphs, then sentences."""
+    clean = (text or "").strip()
+    if not clean:
+        return []
+
+    blocks: List[tuple[str, str]] = []
+    heading = ""
+    buffer: List[str] = []
+
+    def flush() -> None:
+        if buffer:
+            blocks.append((heading, "\n\n".join(buffer).strip()))
+            buffer.clear()
+
+    for raw_line in clean.splitlines():
+        line = raw_line.strip()
+        if re.match(r"^#{1,4}\s+", line):
+            flush()
+            heading = re.sub(r"^#{1,4}\s+", "", line).strip()
+            buffer.append(raw_line)
+        elif re.match(r"^(\*\s*){3,}$|^-{3,}$", line):
+            flush()
+            heading = heading or "Scene break"
+        else:
+            buffer.append(raw_line)
+    flush()
+
+    if not blocks:
+        blocks = [("", clean)]
+
+    parents: List[Dict[str, Any]] = []
+    cursor = 0
+    for heading_path, block in blocks:
+        paragraphs = _split_paragraphs(block) or [block]
+        current: List[str] = []
+        current_tokens = 0
+        for paragraph in paragraphs:
+            paragraph_tokens = _word_count(paragraph)
+            paragraph_parts = _split_large_unit(paragraph, max_tokens) if paragraph_tokens > max_tokens else [paragraph]
+            for part in paragraph_parts:
+                part_tokens = _word_count(part)
+                if current and current_tokens + part_tokens > max_tokens:
+                    parent_text = "\n\n".join(current).strip()
+                    start = clean.find(parent_text[:80], cursor)
+                    start = cursor if start < 0 else start
+                    end = start + len(parent_text)
+                    parents.append({
+                        "text": parent_text,
+                        "headingPath": heading_path,
+                        "start": start,
+                        "end": end,
+                    })
+                    cursor = end
+                    current = []
+                    current_tokens = 0
+                current.append(part)
+                current_tokens += part_tokens
+        if current:
+            parent_text = "\n\n".join(current).strip()
+            start = clean.find(parent_text[:80], cursor)
+            start = cursor if start < 0 else start
+            end = start + len(parent_text)
+            parents.append({
+                "text": parent_text,
+                "headingPath": heading_path,
+                "start": start,
+                "end": end,
+            })
+            cursor = end
+
+    return parents
+
+
+def _child_chunks(parent_text: str, target_tokens: int = CHILD_CHUNK_TOKENS, overlap_tokens: int = CHILD_CHUNK_OVERLAP) -> List[str]:
+    words = parent_text.split()
+    if not words:
+        return []
+    if len(words) <= target_tokens:
+        return [parent_text.strip()]
+
+    chunks: List[str] = []
+    step = max(1, target_tokens - overlap_tokens)
+    for start in range(0, len(words), step):
+        piece = " ".join(words[start:start + target_tokens]).strip()
+        if piece:
+            chunks.append(piece)
+        if start + target_tokens >= len(words):
+            break
+    return chunks
+
+
+def build_index_chunks(root_id: str, text: str) -> List[IndexedChunk]:
+    parents = _split_parent_sections(text)
+    chunks: List[IndexedChunk] = []
+    for parent_index, parent in enumerate(parents):
+        parent_id = f"{root_id}::parent_{parent_index:03d}"
+        child_texts = _child_chunks(parent["text"])
+        for child_index, child_text in enumerate(child_texts):
+            chunk_index = len(chunks)
+            chunks.append({
+                "chunk_id": f"{root_id}::chunk_{chunk_index:03d}",
+                "parent_id": parent_id,
+                "parent_index": parent_index,
+                "child_index": child_index,
+                "chunk_index": chunk_index,
+                "chunk_count": 0,
+                "text": child_text,
+                "parent_preview": parent["text"][:PARENT_PREVIEW_CHARS],
+                "heading_path": parent.get("headingPath", ""),
+                "start": int(parent.get("start", 0)),
+                "end": int(parent.get("end", 0)),
+            })
+
+    total = len(chunks)
+    for chunk in chunks:
+        chunk["chunk_count"] = total
+    return chunks
 
 
 def chapter_to_text(doc: Dict[str, Any]) -> str:
@@ -85,21 +267,11 @@ def asset_to_text(doc: Dict[str, Any]) -> str:
 
 
 def collection_for_asset(asset_type: str) -> str:
-    if asset_type in {"Text Guidelines", "Prompt"}:
-        return "book_style_guide"
-    return "world_system"
+    return PROJECT_KNOWLEDGE_COLLECTION
 
 
 def collection_for_artifact(artifact_type: str, agent_name: str = "") -> str:
-    if artifact_type in {"draft", "edited_content", "humanized_content"}:
-        return "chapters"
-    if "character" in artifact_type:
-        return "characters"
-    if artifact_type in {"research_notes", "fact_check_report"}:
-        return "world_system"
-    if agent_name == "world_builder":
-        return "characters" if "character" in artifact_type else "world_system"
-    return "world_system"
+    return PROJECT_KNOWLEDGE_COLLECTION
 
 
 def index_text(
@@ -117,7 +289,54 @@ def index_text(
     meta = {"projectId": project_id, "sourceName": source_name or doc_id}
     if extra_metadata:
         meta.update(extra_metadata)
-    upsert_document(collection_name, doc_id, text, meta)
+    clean_text = (text or "").strip()
+    if not clean_text:
+        return
+
+    logger.info(
+        "[Indexing] ingest document received collection=%s root_id=%s project_id=%s sourceKind=%s chars=%s",
+        collection_name,
+        doc_id,
+        project_id,
+        meta.get("sourceKind", "unknown"),
+        len(clean_text),
+    )
+    delete_document(collection_name, doc_id)
+    delete_document_chunks(collection_name, project_id, doc_id)
+    chunks = build_index_chunks(doc_id, clean_text)
+    logger.info(
+        "[Indexing] chunking completed root_id=%s project_id=%s chunks=%s strategy=structure_recursive_parent_child_v1",
+        doc_id,
+        project_id,
+        len(chunks),
+    )
+    for chunk in chunks:
+        upsert_document(
+            collection_name,
+            chunk["chunk_id"],
+            chunk["text"],
+            {
+                **meta,
+                "rootId": doc_id,
+                "parentId": chunk["parent_id"],
+                "chunkIndex": chunk["chunk_index"],
+                "chunkCount": chunk["chunk_count"],
+                "parentIndex": chunk["parent_index"],
+                "childIndex": chunk["child_index"],
+                "chunkStart": chunk["start"],
+                "chunkEnd": chunk["end"],
+                "headingPath": chunk["heading_path"],
+                "parentPreview": chunk["parent_preview"],
+                "chunkingStrategy": "structure_recursive_parent_child_v1",
+            },
+        )
+    logger.info(
+        "[Indexing] ingest document completed collection=%s root_id=%s project_id=%s chunks=%s",
+        collection_name,
+        doc_id,
+        project_id,
+        len(chunks),
+    )
 
 
 def index_chapter(project_id: str, chapter_id: str) -> None:
@@ -126,12 +345,17 @@ def index_chapter(project_id: str, chapter_id: str) -> None:
         return
     source = doc.get("title") or f"Chapter {doc.get('number', '')}"
     index_text(
-        "chapters",
+        PROJECT_KNOWLEDGE_COLLECTION,
         chapter_id,
         project_id,
         chapter_to_text(doc),
         source_name=source,
-        extra_metadata={"mongoCollection": "chapters", "status": doc.get("status", "")},
+        extra_metadata={
+            "mongoCollection": "chapters",
+            "sourceKind": "chapter",
+            "number": doc.get("number", ""),
+            "status": doc.get("status", ""),
+        },
     )
 
 
@@ -144,12 +368,16 @@ def index_character(project_id: str, character_id: str) -> None:
     if not doc:
         return
     index_text(
-        "characters",
+        PROJECT_KNOWLEDGE_COLLECTION,
         character_id,
         project_id,
         character_to_text(doc),
         source_name=doc.get("name", character_id),
-        extra_metadata={"mongoCollection": "character_bible", "role": doc.get("role", "")},
+        extra_metadata={
+            "mongoCollection": "character_bible",
+            "sourceKind": "character",
+            "role": doc.get("role", ""),
+        },
     )
 
 
@@ -162,12 +390,16 @@ def index_entity(project_id: str, entity_id: str) -> None:
     if not doc:
         return
     index_text(
-        "world_system",
+        PROJECT_KNOWLEDGE_COLLECTION,
         entity_id,
         project_id,
         entity_to_text(doc),
         source_name=doc.get("name", entity_id),
-        extra_metadata={"mongoCollection": "entity_bible", "entityType": doc.get("type", "")},
+        extra_metadata={
+            "mongoCollection": "entity_bible",
+            "sourceKind": "world",
+            "entityType": doc.get("type", ""),
+        },
     )
 
 
@@ -186,7 +418,11 @@ def index_user_asset(project_id: str, asset_id: str, asset_type: str) -> None:
         project_id,
         asset_to_text(doc),
         source_name=doc.get("name", asset_id),
-        extra_metadata={"mongoCollection": "user_assets", "assetType": asset_type},
+        extra_metadata={
+            "mongoCollection": "user_assets",
+            "sourceKind": "asset",
+            "assetType": asset_type,
+        },
     )
 
 
@@ -209,6 +445,7 @@ def index_artifact(artifact_id: str) -> None:
         source_name=f"{doc.get('agentName', '')}:{artifact_type}",
         extra_metadata={
             "mongoCollection": "artifacts",
+            "sourceKind": "artifact",
             "artifactType": artifact_type,
             "agentName": doc.get("agentName", ""),
         },
@@ -220,7 +457,7 @@ def enqueue_index_artifact(artifact_id: str) -> None:
 
 
 def unindex(doc_id: str, collection_name: str) -> None:
-    delete_document(collection_name, doc_id)
+    delete_document(PROJECT_KNOWLEDGE_COLLECTION, doc_id)
 
 
 def reindex_project(project_id: str) -> None:
