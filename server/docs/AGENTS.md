@@ -13,9 +13,10 @@ START → planner → should_continue_tasks ─┬→ researcher ─┐
 
 | Component | Path |
 |-----------|------|
-| Graph / router | `app/agents/orchestration_graph.py` |
-| Runtime (ReAct, tools) | `app/agents/runtime.py` |
-| HITL | `app/agents/hitl.py` |
+| Graph / router | `app/agent/agent.py` |
+| State | `app/agent/utils/state.py` |
+| Nodes | `app/agent/utils/nodes/` |
+| Tools | `app/agent/utils/tools.py` |
 
 ## Agents
 
@@ -33,7 +34,7 @@ START → planner → should_continue_tasks ─┬→ researcher ─┐
 | `humanizer.py` | Tone pass |
 | `editor.py` | Polish + publish |
 
-Tools: `search_rag` (collections below), `read_chapter`. Handled in `app/agents/runtime.py`.
+Tools are exposed through `app/agent/utils/tools.py` and backed by the project knowledge service.
 
 ## Workflows
 
@@ -49,9 +50,9 @@ Tools: `search_rag` (collections below), `read_chapter`. Handled in `app/agents/
 | Tone | humanizer | `humanizedContent` |
 | Publish | editor | chapter `published`, `bookSummary` |
 
-**World bible:** world_builder → artifact → HITL → `character_bible` / `entity_bible` + Chroma index.
+**World bible:** world_builder → artifact → review in workspace.
 
-**HITL:** plan approval (planner) and world save (world_builder). Reject plan → `RunAbortedError`. Project create with `run_agents=true` uses `skipHitl`.
+**HITL:** plan approval uses LangGraph `interrupt()` and resumes through `/api/agent/threads/{thread_id}/runs/stream`.
 
 ## State handoff
 
@@ -63,7 +64,7 @@ Tools: `search_rag` (collections below), `read_chapter`. Handled in `app/agents/
 | `humanizedContent` | humanizer | editor |
 | `editedContent` | editor | — |
 
-`context_from_previous` on planner tasks → `runtime.resolve_task_context()`.
+Planner tasks are routed by `app/agent/utils/routing.py` and hand off through graph state fields.
 
 ## Vector search (Chroma)
 

@@ -12,11 +12,11 @@ client/
 │   └── book/[id]/page.tsx    # Workspace shell → WorkspaceView
 ├── features/workspace/       # Workspace feature module
 │   ├── WorkspaceView.tsx
-│   ├── hooks/                # useProject, useChatStream, useModelSettings
+│   ├── hooks/                # useProject, useAgentStream, useModelSettings
 │   └── tabs/                 # Agent, Book, Memory, Settings
 ├── components/workspace/     # Presentational UI
 ├── lib/
-│   ├── api/                  # HTTP + SSE streaming
+│   ├── api/                  # HTTP + LangGraph streaming
 │   └── types/                # Domain & API types
 └── config/env.ts             # NEXT_PUBLIC_API_URL
 ```

@@ -1,0 +1,19 @@
+"""LangGraph custom stream helpers."""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+def emit_custom(kind: str, **payload: Any) -> None:
+    """Emit a custom LangGraph stream payload when a stream writer is active."""
+    try:
+        from langgraph.config import get_stream_writer
+
+        writer = get_stream_writer()
+        writer({"kind": kind, **payload})
+    except Exception as exc:
+        logger.debug("No LangGraph custom stream writer available for %s: %s", kind, exc)
+

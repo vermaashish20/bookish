@@ -4,7 +4,7 @@ from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
 from app.services.indexing import enqueue_index_chapter
-from app.agents.streaming import publish_sync_event
+from app.core.streaming import publish_sync_event
 
 
 def _publish_chapter(project_id: str, chapter_id: str) -> None:

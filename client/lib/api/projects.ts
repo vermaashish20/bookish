@@ -65,9 +65,3 @@ export const clearChatSessionMessages = (id: string, sessionId: string) =>
     endpoints.projects.clearChatSession(id, sessionId),
     { method: 'DELETE' },
   );
-
-export const resumeAgent = (id: string, runId: string, response: string) =>
-  request<{ status: string; response: string }>(endpoints.projects.resume(id), {
-    method: 'POST',
-    body: JSON.stringify({ run_id: runId, response }),
-  });

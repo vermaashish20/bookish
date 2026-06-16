@@ -14,7 +14,7 @@ from app.core.telemetry import (
     prompt_payload,
     update_observation,
 )
-from app.agents.streaming import (
+from app.core.streaming import (
     publish_stream_token,
     stream_queue_var,
 )

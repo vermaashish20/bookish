@@ -18,7 +18,6 @@ export default function Home() {
   const [genre, setGenre] = useState('Non-Fiction / Personal Finance');
   const [brief, setBrief] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [startAgent, setStartAgent] = useState(true); // true = Start Agent, false = Create Project Only
   const [isCreating, setIsCreating] = useState(false);
 
   // Handle uploaded file validation
@@ -65,7 +64,6 @@ export default function Home() {
         title: title.trim(),
         genre,
         brief: brief.trim(),
-        run_agents: startAgent
       });
 
       // If a real file was selected, upload it for backend parsing.
@@ -84,7 +82,6 @@ export default function Home() {
       setGenre('Non-Fiction / Personal Finance');
       setBrief('');
       setSelectedFile(null);
-      setStartAgent(true);
 
       // Route to working area
       router.push(`/book/${newBook.id}`);
@@ -378,48 +375,6 @@ export default function Home() {
                       <p className="text-[9px] text-zinc-400 font-medium mt-0.5">Supports TXT or MD references (max 10MB)</p>
                     </label>
                   )}
-                </div>
-              </div>
-
-              {/* Action Pipeline Options */}
-              <div className="space-y-2 pt-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Pipeline Execution Mode</label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  
-                  {/* Option 1: Start Agent */}
-                  <button
-                    type="button"
-                    onClick={() => setStartAgent(true)}
-                    className={`flex flex-col justify-start rounded-md border p-3 text-left transition-all ${
-                      startAgent 
-                        ? 'border-zinc-900 bg-zinc-950/5 text-zinc-950 ring-1 ring-zinc-900' 
-                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 font-semibold text-xs">
-                      <span className={`w-1.5 h-1.5 rounded-full ${startAgent ? 'bg-zinc-900 animate-pulse' : 'bg-zinc-300'}`} />
-                      Start Agent immediately
-                    </div>
-                    <span className="text-[9px] text-zinc-400 mt-1 leading-relaxed">Runs the initial Planner DAG pipeline to structure outline and compile characters in the background.</span>
-                  </button>
-
-                  {/* Option 2: Create Project Only */}
-                  <button
-                    type="button"
-                    onClick={() => setStartAgent(false)}
-                    className={`flex flex-col justify-start rounded-md border p-3 text-left transition-all ${
-                      !startAgent 
-                        ? 'border-zinc-900 bg-zinc-950/5 text-zinc-950 ring-1 ring-zinc-900' 
-                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 font-semibold text-xs">
-                      <span className={`w-1.5 h-1.5 rounded-full ${!startAgent ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
-                      Create project only for now
-                    </div>
-                    <span className="text-[9px] text-zinc-400 mt-1 leading-relaxed">Registers the canvas space and files in the database. All agents remain paused until triggered manually in assets.</span>
-                  </button>
-
                 </div>
               </div>
 

@@ -15,7 +15,6 @@ class CreateProjectPayload(BaseModel):
     subtitle: Optional[str] = ""
     genre: Optional[str] = ""
     brief: str
-    run_agents: bool = True   # True → invoke planner graph immediately; False → create canvas only
 
 class UpdateSettingsPayload(BaseModel):
     settings: SettingsModel
@@ -24,15 +23,3 @@ class AssetUploadPayload(BaseModel):
     name: str
     type: str
     content: str
-
-class PromptSubmitPayload(BaseModel):
-    prompt: str
-
-class MessageSubmitPayload(BaseModel):
-    message: Optional[str] = None
-    prompt: Optional[str] = None  # fallback for backward compatibility
-    session_id: Optional[str] = None
-
-class ResumePayload(BaseModel):
-    run_id: str
-    response: str

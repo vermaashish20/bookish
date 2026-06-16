@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from datetime import datetime
 from app.infrastructure.database.mongo import get_db
-from app.agents.streaming import publish_timeline_snapshot
+from app.core.streaming import publish_timeline_snapshot
 
 
 def _project_id_for_run(run_id: str) -> Optional[str]:

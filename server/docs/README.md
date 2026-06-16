@@ -49,10 +49,10 @@ ANTHROPIC_API_KEY=
 | `POST` | `/api/projects` | Create project |
 | `GET` | `/api/projects` | List projects (lightweight) |
 | `GET` | `/api/projects/{id}` | Full workspace payload |
-| `POST` | `/api/projects/{id}/message` | Run agents (SSE) |
-| `POST` | `/api/projects/{id}/resume` | HITL resume |
+| `POST` | `/api/agent/threads` | Create a LangGraph thread |
+| `POST` | `/api/agent/threads/{thread_id}/runs/stream` | Stream or resume a LangGraph run |
 
-Message: `{ "message": "…" }` · Resume: `{ "run_id": "run_…", "response": "approve" }`
+Run: `{ "projectId": "project_…", "message": "…" }` · Resume: `{ "command": { "resume": "approve" } }`
 
 ## Reindex vectors
 

@@ -1,4 +1,9 @@
 export const endpoints = {
+  agent: {
+    threads: '/api/agent/threads',
+    runStream: (threadId: string) =>
+      `/api/agent/threads/${encodeURIComponent(threadId)}/runs/stream`,
+  },
   projects: {
     list: '/api/projects',
     create: '/api/projects',
@@ -9,12 +14,10 @@ export const endpoints = {
       update: (id: string) => `/api/projects/${id}/settings`,
     },
     assets: (id: string) => `/api/projects/${id}/assets`,
-    message: (id: string) => `/api/projects/${id}/message`,
     messages: (id: string, sessionId?: string) =>
       `/api/projects/${id}/messages${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`,
     chatSessions: (id: string) => `/api/projects/${id}/chat-sessions`,
     clearChatSession: (id: string, sessionId: string) =>
       `/api/projects/${id}/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
-    resume: (id: string) => `/api/projects/${id}/resume`,
   },
 } as const;

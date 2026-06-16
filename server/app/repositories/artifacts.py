@@ -7,7 +7,7 @@ from bson import ObjectId
 from datetime import datetime
 from app.infrastructure.database.mongo import get_db
 from app.services.indexing import enqueue_index_artifact
-from app.agents.streaming import publish_sync_event
+from app.core.streaming import publish_sync_event
 
 
 def create_artifact(

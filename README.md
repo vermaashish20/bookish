@@ -181,18 +181,18 @@ Prompts live in `server/app/prompts/` — see [server/docs/AGENTS.md](server/doc
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/projects` | List projects (summary) |
-| `POST` | `/api/projects` | Create project (+ optional `run_agents`) |
+| `POST` | `/api/projects` | Create project |
 | `GET` | `/api/projects/{id}` | Full workspace payload |
 | `DELETE` | `/api/projects/{id}` | Delete project |
-| `POST` | `/api/projects/{id}/message` | Run agents (SSE stream) |
-| `POST` | `/api/projects/{id}/resume` | Resume HITL (`run_id`, `response`) |
+| `POST` | `/api/agent/threads` | Create a LangGraph thread |
+| `POST` | `/api/agent/threads/{thread_id}/runs/stream` | Stream or resume a LangGraph run |
 | `GET` | `/api/projects/{id}/messages` | Chat history |
 | `GET/PUT` | `/api/projects/{id}/settings` | Per-agent model routing |
 
 Message body example:
 
 ```json
-{ "message": "Write chapter 1 based on my brief." }
+{ "projectId": "project_...", "message": "Write chapter 1 based on my brief." }
 ```
 
 ---
@@ -234,7 +234,7 @@ npm run lint
 ## Contributing
 
 1. Use the `app/` package under `server/` for all backend changes.
-2. Edit agent behavior in `server/app/prompts/` and `server/app/agents/nodes/`, not duplicated markdown copies.
+2. Edit agent behavior in `server/app/prompts/` and `server/app/agent/utils/nodes/`, not duplicated markdown copies.
 3. Update [server/docs/AGENTS.md](server/docs/AGENTS.md) when changing orchestration or workflows.
 
 ---
