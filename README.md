@@ -10,7 +10,7 @@ Monorepo: **Next.js** workspace UI + **FastAPI / LangGraph** backend with **Mong
 
 - **Project workspace** — create books from a title, genre, and brief; attach reference assets (Markdown / text).
 - **Planner-first agents** — one LLM planner decomposes each user message into an ordered task list or answers directly in chat.
-- **Specialist agents** — research, world-building, drafting, fact-checking, humanizing, and editing in a LangGraph DAG.
+- **Agent pipeline** — research, world-building, drafting, continuity review, tone polish, and editing in a LangGraph DAG.
 - **Human-in-the-loop (HITL)** — approve execution plans and world-bible saves before they commit.
 - **Streaming UX** — Server-Sent Events (SSE) for live tokens, agent status, and document streams.
 - **Semantic memory** — Chroma vector search over chapters, characters, entities, and style guides (`search_rag`, `read_chapter`).
@@ -32,7 +32,7 @@ flowchart LR
   subgraph Orchestration
     LG[LangGraph]
     P[Planner]
-    A[Specialist agents]
+    A[Agent nodes]
   end
   subgraph Data
     Mongo[(MongoDB)]
@@ -51,7 +51,7 @@ flowchart LR
   Mongo -->|index on write| Chroma
 ```
 
-**Typical chapter flow:** `researcher` → `writer` → `fact_checker` → `humanizer` → `editor` (planner chooses agents per request).
+**Typical chapter flow:** `researcher` → `writer` → `editor` (planner chooses agents per request).
 
 ---
 
@@ -168,9 +168,7 @@ Open [http://localhost:3000](http://localhost:3000), create a project, and chat 
 | **Researcher** | Gathers context via RAG; produces research notes |
 | **World builder** | Creates characters / entities (HITL before DB save) |
 | **Writer** | Drafts chapter prose |
-| **Fact checker** | Continuity audit vs bible and lore |
-| **Humanizer** | Reduces AI tone; aligns voice |
-| **Editor** | Polish and publish chapter; updates book summary |
+| **Editor** | Continuity, tone, polish, and publish chapter; updates book summary |
 
 Prompts live in `server/app/prompts/` — see [server/docs/AGENTS.md](server/docs/AGENTS.md).
 

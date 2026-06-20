@@ -14,18 +14,10 @@ interface SettingsTabProps {
   setWriterProvider: (value: ProviderType) => void;
   writerModel: string;
   setWriterModel: (value: string) => void;
-  checkerProvider: ProviderType;
-  setCheckerProvider: (value: ProviderType) => void;
-  checkerModel: string;
-  setCheckerModel: (value: string) => void;
   researcherProvider: ProviderType;
   setResearcherProvider: (value: ProviderType) => void;
   researcherModel: string;
   setResearcherModel: (value: string) => void;
-  humanizerProvider: ProviderType;
-  setHumanizerProvider: (value: ProviderType) => void;
-  humanizerModel: string;
-  setHumanizerModel: (value: string) => void;
   editorProvider: ProviderType;
   setEditorProvider: (value: ProviderType) => void;
   editorModel: string;

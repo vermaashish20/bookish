@@ -11,6 +11,7 @@ from app.repositories.projects import (
     get_project_summary,
     get_unified_project_payload,
 )
+from app.repositories.artifacts import get_artifact
 from app.schemas import AssetUploadPayload, CreateProjectPayload
 from app.services.assets import parse_asset_file
 
@@ -47,8 +48,6 @@ def register_project(payload: CreateProjectPayload):
     settings_dict = {
         "plannerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
         "writerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "factCheckerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "humanizerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
         "researcherModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
         "editorModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
         "worldBuilderModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
@@ -89,6 +88,14 @@ def fetch_project_details(id: str):
     if not project:
         raise HTTPException(status_code=404, detail="Book project not found.")
     return project
+
+
+@router.get("/{id}/artifacts/{artifact_id}")
+def fetch_project_artifact(id: str, artifact_id: str):
+    artifact = get_artifact(artifact_id)
+    if not artifact or artifact.get("projectId") != id:
+        raise HTTPException(status_code=404, detail="Artifact not found.")
+    return artifact
 
 
 @router.delete("/{id}")

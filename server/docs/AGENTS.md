@@ -6,8 +6,6 @@
 START → planner → should_continue_tasks ─┬→ researcher ─┐
                                          ├→ world_builder ┤
                                          ├→ writer ────────┤→ … → finalize → END
-                                         ├→ fact_checker ──┤
-                                         ├→ humanizer ─────┤
                                          └→ editor ────────┘
 ```
 
@@ -20,7 +18,7 @@ START → planner → should_continue_tasks ─┬→ researcher ─┐
 
 ## Agents
 
-`planner`, `researcher`, `world_builder`, `writer`, `fact_checker`, `humanizer`, `editor`.
+`planner`, `researcher`, `world_builder`, `writer`, `editor`.
 
 **Prompts (source of truth):** `app/prompts/*.py`
 
@@ -30,9 +28,7 @@ START → planner → should_continue_tasks ─┬→ researcher ─┐
 | `researcher.py` | RAG + research report |
 | `world_builder.py` | Character / entity JSON |
 | `writer.py` | Prose draft |
-| `fact_checker.py` | Continuity audit |
-| `humanizer.py` | Tone pass |
-| `editor.py` | Polish + publish |
+| `editor.py` | Continuity, tone, polish + publish |
 
 Tools are exposed through `app/agent/utils/tools.py` and backed by the project knowledge service.
 
@@ -40,14 +36,12 @@ Tools are exposed through `app/agent/utils/tools.py` and backed by the project k
 
 **Chat:** message → planner → (HITL plan approval) → specialists → finalize.
 
-**Typical chapter chain:** researcher → writer → fact_checker → humanizer → editor.
+**Typical chapter chain:** researcher → writer → editor.
 
 | Step | Agent | Persists |
 |------|-------|----------|
 | Research | researcher | `researchNotes` |
 | Draft | writer | chapter `draft`, `draftContent` |
-| Audit | fact_checker | `factCheckReport` |
-| Tone | humanizer | `humanizedContent` |
 | Publish | editor | chapter `published`, `bookSummary` |
 
 **World bible:** world_builder → artifact → review in workspace.
@@ -58,10 +52,8 @@ Tools are exposed through `app/agent/utils/tools.py` and backed by the project k
 
 | Field | Set by | Read by |
 |-------|--------|---------|
-| `researchNotes` | researcher | writer, fact_checker |
-| `factCheckReport` | fact_checker | writer |
-| `draftContent` | writer | fact_checker, humanizer, editor |
-| `humanizedContent` | humanizer | editor |
+| `researchNotes` | researcher | writer, editor |
+| `draftContent` | writer | editor |
 | `editedContent` | editor | — |
 
 Planner tasks are routed by `app/agent/utils/routing.py` and hand off through graph state fields.

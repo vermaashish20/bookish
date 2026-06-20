@@ -60,7 +60,7 @@ flowchart TD
   HITL_PLAN -->|reject| CANCEL[Cancel run]
   HITL_PLAN -->|approve| TASKS[Specialist task queue]
 
-  TASKS --> AGENT[Researcher / Writer / World Builder / Fact Checker / Humanizer / Editor]
+  TASKS --> AGENT[Researcher / Writer / World Builder / Editor]
   AGENT --> TOOLS[Knowledge tools]
   TOOLS --> KB[Knowledge Base Layer]
   KB --> MONGO[(MongoDB source of truth)]
@@ -236,7 +236,7 @@ flowchart TD
 Recommended budgets:
 
 - normal agents: max 2 retrieval rounds
-- researcher / fact-checker: max 3 retrieval rounds
+- researcher / continuity-heavy editor passes: max 3 retrieval rounds
 - max 5 documents per tool call
 - minimum relevance threshold per scope
 - log every query, result, score, and selected source
@@ -253,8 +253,6 @@ Every agent can access the same KB layer, but tool permissions and default scope
 | Researcher | all scopes, assets, artifacts, web/project knowledge | research artifact |
 | Writer | narrative, characters, world, plot, continuity, style | draft artifact, draft chapter |
 | World Builder | characters, world, locations, organizations, objects, continuity | proposed/approved memory |
-| Fact Checker | continuity, timeline, world, characters, narrative, source artifacts | fact-check artifact |
-| Humanizer | style, character voice, current draft/chapter | humanized artifact |
 | Editor | style, continuity, narrative, plot, chapter, character voice | edited artifact, chapter update, summary |
 
 ---
@@ -407,8 +405,8 @@ Current implementation still has these gaps:
 - Agents can skip retrieval unless the prompt/tool loop leads them to it.
 - No retrieval grading loop yet.
 - No retrieval log collection yet.
-- Humanizer/editor mostly rely on state handoff instead of active style/continuity retrieval.
-- Style guide exists as a vector collection, but it is not strongly enforced in writer/humanizer/editor prompts.
+- Editor mostly relies on state handoff instead of active style/continuity retrieval.
+- Style guide exists as a vector collection, but it is not strongly enforced in writer/editor prompts.
 - Mongo `entity_bible` is doing too much; locations, objects, organizations, and world facts should become clearer.
 
 ---

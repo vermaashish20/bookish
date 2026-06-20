@@ -1,4 +1,4 @@
-"""Finalization node."""
+"""Run completion helpers for the Bookish graph."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,21 +11,17 @@ from app.repositories.chat_messages import add_chat_message
 from app.repositories.projects import get_unified_project_payload
 
 
-def finalize_node(state: BookishAgentState) -> dict[str, Any]:
+def complete_run(state: BookishAgentState) -> dict[str, Any]:
     """Persist the final assistant message and close the run."""
+    if state.get("finalMessageId"):
+        return {}
+
     now = datetime.utcnow().isoformat()
     status = state.get("status", "completed")
 
     if status == "rejected":
         final_response = state.get("finalResponse") or "Run cancelled."
-        final_message_id = add_chat_message(
-            project_id=state["projectId"],
-            role="assistant",
-            content=final_response,
-            agent_run_id=state["agentRunId"],
-            artifact_references=state.get("artifactIds", []),
-            session_id=state.get("chatSessionId"),
-        )
+        final_message_id = _add_final_message(state, final_response)
         complete_agent_run(state["agentRunId"], final_message_id, status="failed")
         emit_custom(
             "run_rejected",
@@ -41,31 +37,8 @@ def finalize_node(state: BookishAgentState) -> dict[str, Any]:
         }
 
     failed_tasks = [task for task in state.get("tasks", []) if task.get("status") == "failed"]
-    final_response = state.get("finalResponse")
-    if not final_response:
-        if state.get("editedContent"):
-            final_response = "Final edited draft complete. Review the generated chapter and artifact preview."
-        elif state.get("humanizedContent"):
-            final_response = "Humanized draft complete. Review the generated artifact preview."
-        elif state.get("draftContent"):
-            final_response = "Draft complete. Review the generated chapter and artifact preview."
-        elif state.get("worldBuildingNotes"):
-            final_response = "World-building pass complete. Review the generated lore artifact."
-        elif state.get("factCheckReport"):
-            final_response = state["factCheckReport"] or "Fact-check complete."
-        elif state.get("researchNotes"):
-            final_response = state["researchNotes"] or "Research complete."
-        else:
-            final_response = "Done."
-
-    final_message_id = add_chat_message(
-        project_id=state["projectId"],
-        role="assistant",
-        content=final_response,
-        agent_run_id=state["agentRunId"],
-        artifact_references=state.get("artifactIds", []),
-        session_id=state.get("chatSessionId"),
-    )
+    final_response = state.get("finalResponse") or _default_final_response(state)
+    final_message_id = _add_final_message(state, final_response)
 
     if failed_tasks:
         fail_agent_run(state["agentRunId"], "One or more graph tasks failed.")
@@ -89,3 +62,25 @@ def finalize_node(state: BookishAgentState) -> dict[str, Any]:
         "completedAt": now,
     }
 
+
+def _add_final_message(state: BookishAgentState, final_response: str) -> str:
+    return add_chat_message(
+        project_id=state["projectId"],
+        role="assistant",
+        content=final_response,
+        agent_run_id=state["agentRunId"],
+        artifact_references=state.get("artifactIds", []),
+        session_id=state.get("chatSessionId"),
+    )
+
+
+def _default_final_response(state: BookishAgentState) -> str:
+    if state.get("editedContent"):
+        return "Final edited draft complete. Review the generated chapter and artifact preview."
+    if state.get("draftContent"):
+        return "Draft complete. Review the generated chapter and artifact preview."
+    if state.get("worldBuildingNotes"):
+        return "World-building pass complete. Review the generated lore artifact."
+    if state.get("researchNotes"):
+        return state["researchNotes"] or "Research complete."
+    return "Done."

@@ -19,7 +19,7 @@ Bookish has more than one knowledge surface. Agents must understand the differen
 | Source assets | Persistent Mongo `user_assets` | Initial brief, plot, characters, outlines, guidelines, uploaded docs | Exact-read first when the user asks about original/source material |
 | Formal memory | Persistent Mongo `character_bible`, `entity_bible` | Promoted characters, locations, organizations, objects, world facts | Use exact reads for known records and duplicate checks |
 | Narrative | Persistent Mongo `chapters` plus Chroma index | Chapter text, summaries, story-so-far continuity | Exact-read known chapters; semantic search for targeted passages |
-| Artifacts | Persistent Mongo `artifacts` plus Chroma index | Agent outputs, drafts, research notes, fact-check reports | Search when previous agent outputs matter |
+| Artifacts | Persistent Mongo `artifacts` plus Chroma index | Agent outputs, drafts, research notes, edited continuity passes | Search when previous agent outputs matter |
 | RAG index | Chroma collections | Small chunks, semantic lookup, targeted facts | Do not use as the only source for whole uploaded documents |
 
 The Knowledge Base layer should hide raw database details behind agent-facing tools. Agents should not call Mongo or Chroma directly. The preferred router is `retrieve_knowledge`:
@@ -50,7 +50,7 @@ Key rule: a zero count in formal memory means "not promoted yet," not "does not 
 - RAG should be framed as semantic lookup over chunks, not the full project memory.
 - Persistent reads should be framed as source-of-truth access to full records.
 - Planner direct answers should preserve retrieved context. Regenerating the answer from lightweight metadata can lose the facts that were just retrieved.
-- Specialist agents need the same retrieval policy as the planner because delegated tasks run in their own prompt context.
+- Agent nodes need the same retrieval policy as the planner because delegated tasks run in their own prompt context.
 
 ## Frontend And Artifact Lessons
 - Chat responses and artifacts need separate intent. A short conversational confirmation should stay in chat; long generated drafts, reports, bibles, and edited content belong in the preview/artifact flow.

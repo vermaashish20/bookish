@@ -24,7 +24,7 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     characters = get_project_characters(project_id)
     entities = get_project_entities(project_id)
     assets = get_project_assets(project_id)
-    artifacts = get_project_artifacts(project_id)
+    artifacts = get_project_artifacts(project_id, include_content=False)
 
     tonality_key = str(p.get("tonality", "")).lower()
     tonality_scores = {
@@ -65,7 +65,6 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
                 if artifact:
                     decision_item["artifactId"]      = artifact_id
                     decision_item["artifactType"]    = artifact.get("artifactType", "")
-                    decision_item["artifactContent"] = artifact.get("content", "")
             decision_log.append(decision_item)
 
     entity_bible = [

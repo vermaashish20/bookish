@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from pydantic import BaseModel
 
-from app.agent.agent import graph
+from app.agent.agent import api_graph as graph
 from app.agent.utils.context import load_project_context
 from app.agent.utils.state import BookishAgentState
 from app.core.streaming import STREAM_HEADERS
@@ -105,10 +105,9 @@ def _build_graph_input(thread_id: str, payload: RunStreamPayload) -> BookishAgen
         tasks=[],
         currentTaskIndex=0,
         approval=None,
+        pendingWrite=None,
         researchNotes=None,
-        factCheckReport=None,
         draftContent=None,
-        humanizedContent=None,
         editedContent=None,
         worldBuildingNotes=None,
         artifactIds=[],

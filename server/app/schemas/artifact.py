@@ -12,10 +12,9 @@ from pydantic import BaseModel, Field
 
 ArtifactType = Literal[
     "research_notes",
+    "world_building",
     "draft",
-    "humanized_content",
     "edited_content",
-    "fact_check_report",
     "character_draft",
     "location_draft",
     "object_draft",
@@ -25,9 +24,7 @@ ArtifactType = Literal[
 AgentName = Literal[
     "researcher",
     "writer",
-    "humanizer",
     "editor",
-    "fact_checker",
     "world_builder",
 ]
 
@@ -49,9 +46,8 @@ class Artifact(BaseModel):
     content: str       # Full text or JSON string of the generated artifact
 
     # Agent-specific metadata:
-    #   writer/humanizer/editor : {"wordCount": int, "task": str}
+    #   writer/editor           : {"wordCount": int, "task": str}
     #   researcher              : {"sourcesCount": int, "query": str}
-    #   fact_checker            : {"groundingSourcesCount": int, "task": str}
     #   world_builder           : {"entityType": str, "entityName": str}
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

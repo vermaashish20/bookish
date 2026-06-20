@@ -21,11 +21,11 @@ def build_checkpointer() -> Any:
     persistent database, making it the durable default for graph checkpoints.
     """
     try:
-        from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
-        from pymongo import AsyncMongoClient
+        from langgraph.checkpoint.mongodb import MongoDBSaver
+        from pymongo import MongoClient
 
-        saver = AsyncMongoDBSaver(
-            client=AsyncMongoClient(MONGO_URI),
+        saver = MongoDBSaver(
+            client=MongoClient(MONGO_URI),
             db_name=MONGO_DB_NAME,
         )
         setup = getattr(saver, "setup", None)

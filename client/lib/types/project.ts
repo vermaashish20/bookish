@@ -62,7 +62,7 @@ export interface GeneratedArtifact {
   agentRunId: string;
   agentName: string;
   artifactType: string;
-  content: string;
+  content?: string;
   metadata?: Record<string, unknown>;
   relatedChapterId?: string | null;
   createdAt: string;
@@ -107,8 +107,6 @@ export interface ProjectSettings {
   plannerModel: ModelConfig;
   researcherModel: ModelConfig;
   writerModel: ModelConfig;
-  factCheckerModel: ModelConfig;
-  humanizerModel: ModelConfig;
   editorModel: ModelConfig;
   worldBuilderModel: ModelConfig;
 }
@@ -133,7 +131,7 @@ export interface BookProject {
 
 export interface ChatMessage {
   id: string;
-  sender: 'user' | 'Planner' | 'Researcher' | 'Writer' | 'Fact-Checker' | 'Humanizer' | 'Editor' | 'Assembler' | 'System';
+  sender: 'user' | 'Planner' | 'Researcher' | 'World Builder' | 'Writer' | 'Editor' | 'Assembler' | 'System';
   text: string;
   timestamp: string;
   thinking?: string;

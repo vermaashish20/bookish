@@ -71,7 +71,7 @@ Answer/AgentFlow: Planner retrieves source assets, chapter list, and existing ch
 ### Query 3.5
 User: "Check if chapter 2 contradicts the character motivations."
 
-Answer/AgentFlow: Planner retrieves chapter 2 from persistent chapters and retrieves character/formal memory plus source assets if formal memory is empty. Then delegate to `fact_checker`, which returns a fact-check report with verified, contradicted, and unverified items.
+Answer/AgentFlow: Planner retrieves chapter 2 from persistent chapters and retrieves character/formal memory plus source assets if formal memory is empty. Then delegate to `editor`, which returns an edited continuity pass with verified, contradicted, and unverified items called out in the notes.
 
 ## 4. Knowledge Retrieval Mode Selection
 
@@ -142,7 +142,7 @@ Answer/AgentFlow: Planner should delegate to writer if user wants creative prose
 ### Query 6.4
 User: "Make this more atmospheric."
 
-Answer/AgentFlow: If there is active draft content in state or selected artifact, planner delegates to `editor` or `humanizer` depending on whether the request is style polish or naturalization. If no active draft exists, ask what text/chapter to revise or retrieve the current chapter if implied.
+Answer/AgentFlow: If there is active draft content in state or selected artifact, planner delegates to `editor` for style polish or naturalization. If no active draft exists, ask what text/chapter to revise or retrieve the current chapter if implied.
 
 ## 7. Editing, Humanizing, And Fact Checking
 
@@ -154,17 +154,17 @@ Answer/AgentFlow: Planner retrieves chapter 1 persistent text, then delegates to
 ### Query 7.2
 User: "Humanize the latest draft."
 
-Answer/AgentFlow: Planner retrieves latest draft artifact or chapter, then delegates to `humanizer`. Humanizer returns a more natural version and saves a humanized artifact.
+Answer/AgentFlow: Planner retrieves latest draft artifact or chapter, then delegates to `editor`. Editor returns a more natural version and saves an edited artifact.
 
 ### Query 7.3
 User: "Fact check the draft against the source assets."
 
-Answer/AgentFlow: Planner retrieves latest draft/chapter and source assets. Delegate to `fact_checker`. Fact checker should classify claims as verified, contradicted, or unverified and should not invent missing source facts.
+Answer/AgentFlow: Planner retrieves latest draft/chapter and source assets. Delegate to `editor`. Editor should classify claims as verified, contradicted, or unverified and should not invent missing source facts.
 
 ### Query 7.4
 User: "Does the chapter match the original tone guidelines?"
 
-Answer/AgentFlow: Planner retrieves target chapter and source/style assets. Delegate to `fact_checker` or `editor` depending on wording. Direct answer should cite checked style guidelines.
+Answer/AgentFlow: Planner retrieves target chapter and source/style assets. Delegate to `editor` when an artifact or prose change is needed. Direct answer should cite checked style guidelines.
 
 ## 8. Preview Panel And Artifact Behavior
 
@@ -269,12 +269,12 @@ Answer/AgentFlow: Planner retrieves source assets, formal memory, and chapter li
 ### Query 12.4
 User: "Fact check it."
 
-Answer/AgentFlow: Planner retrieves Chapter 1 draft and source/formal memory. Delegate to fact_checker. Fact checker produces report artifact.
+Answer/AgentFlow: Planner retrieves Chapter 1 draft and source/formal memory. Delegate to editor. Editor produces an edited continuity pass artifact.
 
 ### Query 12.5
 User: "Edit and humanize it."
 
-Answer/AgentFlow: Planner retrieves latest chapter/draft content. Delegate to editor and/or humanizer in logical order. Save edited/humanized artifacts and update preview.
+Answer/AgentFlow: Planner retrieves latest chapter/draft content. Delegate to editor. Save the edited artifact and update preview.
 
 ### Query 12.6
 User: "Show me all chapters in the book tab."
@@ -287,7 +287,7 @@ Answer/AgentFlow: Frontend should already display Mongo chapters, including draf
 - Source assets are checked before claiming no characters, plot, or guidelines exist.
 - Persistent reads are used for full source assets and full chapter text.
 - RAG is used for targeted semantic lookup.
-- Agent delegation occurs for writing, editing, humanizing, fact checking, and world building.
+- Agent delegation occurs for writing, editing, continuity review, tone polish, and world building.
 - Writer output creates a draft artifact and draft chapter.
 - Large generated text streams into preview.
 - Book tab displays Mongo draft chapters with draft/published tags.

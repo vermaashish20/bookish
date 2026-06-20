@@ -8,7 +8,7 @@ import type {
   SettingsResponse,
 } from '@/lib/types/api';
 import type { BookProject } from '@/lib/types';
-import type { ChatSession } from '@/lib/types/project';
+import type { ChatSession, GeneratedArtifact } from '@/lib/types/project';
 
 export const fetchProjects = () =>
   request<BookProject[]>(endpoints.projects.list);
@@ -50,6 +50,9 @@ export const uploadAssetFile = (id: string, file: File, type?: string) => {
     body: form,
   });
 };
+
+export const fetchArtifact = (id: string, artifactId: string) =>
+  request<GeneratedArtifact>(endpoints.projects.artifact(id, artifactId));
 
 export const fetchProjectMessages = (id: string, sessionId?: string) =>
   request<unknown[]>(endpoints.projects.messages(id, sessionId));

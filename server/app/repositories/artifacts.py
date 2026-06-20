@@ -1,6 +1,6 @@
 """
 Repository for artifacts collection
-Agent-generated content (research notes, drafts, edits, fact-check reports)
+Agent-generated content (research notes, drafts, edits, world-building notes)
 """
 from typing import Dict, Any, Optional, List
 from bson import ObjectId
@@ -13,8 +13,8 @@ from app.core.streaming import publish_sync_event
 def create_artifact(
     project_id: str,
     agent_run_id: str,
-    agent_name: str,  # "researcher" | "fact_checker" | "writer" | "humanizer" | "editor"
-    artifact_type: str,  # "research_notes" | "fact_check_report" | "draft" | "edited_content" | "humanized_content"
+    agent_name: str,  # "researcher" | "world_builder" | "writer" | "editor"
+    artifact_type: str,  # "research_notes" | "world_building" | "draft" | "edited_content"
     content: str,
     metadata: Optional[Dict[str, Any]] = None,
     related_chapter_id: Optional[str] = None
@@ -55,7 +55,8 @@ def get_project_artifacts(
     project_id: str,
     agent_name: Optional[str] = None,
     artifact_type: Optional[str] = None,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
+    include_content: bool = True,
 ) -> List[Dict[str, Any]]:
     """Get artifacts for a project with optional filtering"""
     db = get_db()
@@ -68,7 +69,8 @@ def get_project_artifacts(
     if artifact_type:
         query["artifactType"] = artifact_type
     
-    cursor = db.artifacts.find(query).sort("createdAt", -1)
+    projection = None if include_content else {"content": 0}
+    cursor = db.artifacts.find(query, projection).sort("createdAt", -1)
     
     if limit:
         cursor = cursor.limit(limit)

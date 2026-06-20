@@ -138,10 +138,10 @@ export default function AgentAssistant({
                   </div>
                   <MessageContent
                     className={cn(
-                      'rounded-3xl px-4 py-3 shadow-xs',
+                      'rounded-3xl px-4 py-3',
                       message.sender === 'user'
-                        ? 'rounded-tr-sm border border-zinc-300 bg-white text-zinc-900 group-[.is-user]:bg-white group-[.is-user]:text-zinc-900'
-                        : 'rounded-tl-sm border border-zinc-300 bg-white text-zinc-800',
+                        ? 'rounded-tr-sm border border-zinc-300 bg-white text-zinc-900 shadow-xs group-[.is-user]:bg-white group-[.is-user]:text-zinc-900'
+                        : 'bg-transparent text-zinc-800 shadow-none',
                     )}
                   >
                     {message.text ? (
@@ -209,7 +209,7 @@ function ApprovalCard({
   onResume?: (decision: string) => void;
 }) {
   const firstTask = confirmation.tasks?.[0];
-  const taskLabel = firstTask?.agent ? `Node: ${firstTask.agent}` : 'Plan approval';
+  const taskLabel = firstTask?.agent ? `Node: ${firstTask.agent}` : confirmation.text;
 
   return (
     <Confirmation
@@ -219,7 +219,7 @@ function ApprovalCard({
     >
       <ConfirmationTitle>
         <ConfirmationRequest className="text-sm leading-relaxed text-zinc-700">
-          This tool wants to execute. Do you approve this action?
+          {confirmation.text}
           <span className="mt-1 block text-sm font-medium text-zinc-950">
             {taskLabel}
           </span>

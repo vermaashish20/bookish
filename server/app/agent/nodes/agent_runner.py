@@ -1,4 +1,4 @@
-"""Additional specialist nodes for the LangGraph-native Bookish agent."""
+"""Shared execution helpers for agent nodes."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,100 +8,11 @@ from app.agent.utils.models import call_project_model
 from app.agent.utils.state import BookishAgentState
 from app.agent.utils.streaming import emit_custom
 from app.agent.utils.tools import read_project_sources, retrieve_project_knowledge
-from app.prompts.editor import PROMPT as EDITOR_PROMPT
-from app.prompts.fact_checker import PROMPT as FACT_CHECKER_PROMPT
-from app.prompts.humanizer import PROMPT as HUMANIZER_PROMPT
-from app.prompts.world_builder import PROMPT as WORLD_BUILDER_PROMPT
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.artifacts import create_artifact
-from app.repositories.chapters import update_chapter_content
 
 
-def fact_checker_node(state: BookishAgentState) -> dict[str, Any]:
-    source_text = state.get("draftContent") or state.get("worldBuildingNotes") or ""
-    return _run_specialist_node(
-        state,
-        agent="fact_checker",
-        model_key="factCheckerModel",
-        fallback_keys=["writerModel", "plannerModel"],
-        artifact_type="fact_check_report",
-        output_state_key="factCheckReport",
-        system_prompt=FACT_CHECKER_PROMPT,
-        source_label="DRAFT OR LORE TO AUDIT",
-        source_text=source_text,
-        default_fallback="# Continuity Audit Report\n\nNo model output was produced.",
-    )
-
-
-def humanizer_node(state: BookishAgentState) -> dict[str, Any]:
-    source_text = state.get("draftContent") or ""
-    result = _run_specialist_node(
-        state,
-        agent="humanizer",
-        model_key="writerModel",
-        fallback_keys=["plannerModel"],
-        artifact_type="humanized_content",
-        output_state_key="humanizedContent",
-        system_prompt=HUMANIZER_PROMPT,
-        source_label="DRAFT TO HUMANIZE",
-        source_text=source_text,
-        default_fallback=source_text or "No draft content was available to humanize.",
-    )
-    if result.get("humanizedContent"):
-        result["draftContent"] = result["humanizedContent"]
-    return result
-
-
-def editor_node(state: BookishAgentState) -> dict[str, Any]:
-    source_text = state.get("humanizedContent") or state.get("draftContent") or ""
-    result = _run_specialist_node(
-        state,
-        agent="editor",
-        model_key="editorModel",
-        fallback_keys=["writerModel", "plannerModel"],
-        artifact_type="edited_content",
-        output_state_key="editedContent",
-        system_prompt=EDITOR_PROMPT,
-        source_label="DRAFT TO EDIT",
-        source_text=source_text,
-        default_fallback=source_text or "No draft content was available to edit.",
-    )
-    edited = result.get("editedContent")
-    if isinstance(edited, str) and edited.strip():
-        chapter_id = _latest_chapter_id(result.get("tasks", []))
-        if chapter_id:
-            update_chapter_content(
-                chapter_id=chapter_id,
-                content=edited,
-                word_count=len(edited.split()),
-                status="completed",
-            )
-            emit_custom(
-                "chapter_upserted",
-                runId=state["agentRunId"],
-                chapterId=chapter_id,
-            )
-        result["draftContent"] = edited
-    return result
-
-
-def world_builder_node(state: BookishAgentState) -> dict[str, Any]:
-    source_text = state.get("researchNotes") or ""
-    return _run_specialist_node(
-        state,
-        agent="world_builder",
-        model_key="plannerModel",
-        fallback_keys=["writerModel"],
-        artifact_type="world_building",
-        output_state_key="worldBuildingNotes",
-        system_prompt=WORLD_BUILDER_PROMPT,
-        source_label="RESEARCH AND PROJECT CONTEXT",
-        source_text=source_text,
-        default_fallback="# World Building Notes\n\nNo model output was produced.",
-    )
-
-
-def _run_specialist_node(
+def run_agent_node(
     state: BookishAgentState,
     *,
     agent: str,
@@ -163,7 +74,7 @@ def _run_specialist_node(
         artifact_type=artifact_type,
         content=output,
         metadata={"task": task["task"]},
-        related_chapter_id=_latest_chapter_id(tasks),
+        related_chapter_id=latest_chapter_id(tasks),
     )
     completed_at = datetime.utcnow().isoformat()
     task.update(
@@ -226,13 +137,10 @@ Tone: {project_context.get('tonality', 'Unknown')}
 Story so far: {project_context.get('bookSummary') or 'The story has not started yet.'}
 
 {source_label}:
-{source_text or 'No prior specialist output is available.'}
+{source_text or 'No prior agent output is available.'}
 
 RESEARCH NOTES:
 {state.get('researchNotes') or 'No research notes were produced.'}
-
-FACT CHECK REPORT:
-{state.get('factCheckReport') or 'No fact-check report was produced.'}
 
 PROJECT SOURCES:
 {sources}
@@ -242,7 +150,7 @@ RETRIEVAL RESULTS:
 """.strip()
 
 
-def _latest_chapter_id(tasks: list[dict[str, Any]]) -> str | None:
+def latest_chapter_id(tasks: list[dict[str, Any]]) -> str | None:
     for task in reversed(tasks):
         chapter_id = task.get("chapterId")
         if chapter_id:

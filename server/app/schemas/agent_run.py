@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 class AgentExecution(BaseModel):
     """One agent's execution record within an agent run."""
-    agent: str = Field(..., description="Agent name: researcher | writer | humanizer | editor | fact_checker | world_builder")
+    agent: str = Field(..., description="Agent name: planner | researcher | world_builder | writer | editor")
     taskInput: str = Field(..., description="Task instruction passed to the agent")
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     startedAt: Optional[str] = None    # ISO 8601

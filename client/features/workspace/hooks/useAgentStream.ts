@@ -17,7 +17,7 @@ function findInterrupt(value: unknown): LangGraphInterrupt | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
 
-  if (record.kind === 'plan_approval') {
+  if (record.kind === 'plan_approval' || record.kind === 'write_approval') {
     return record as LangGraphInterrupt;
   }
 
@@ -89,16 +89,16 @@ export function useAgentStream(
       if (interrupt) {
         if (interrupt.threadId) threadIdRef.current = interrupt.threadId;
         setPendingConfirmation({
-          text: interrupt.prompt ?? 'Review the execution plan. Approve to continue?',
+          text: interrupt.prompt ?? 'Approve this action?',
           run_id: interrupt.runId ?? '',
           summary: interrupt.summary,
           tasks: interrupt.tasks,
         });
         const messageId = assistantMessageIdRef.current;
         if (messageId) {
-          updateAssistantMessage(messageId, interrupt.summary ?? 'Plan ready for approval.');
+          updateAssistantMessage(messageId, interrupt.summary ?? 'Approval needed.');
         }
-        setCurrentAgentStatus('Waiting for plan approval.');
+        setCurrentAgentStatus('Waiting for approval.');
         return;
       }
 

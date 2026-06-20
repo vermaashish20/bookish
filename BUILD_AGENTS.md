@@ -451,7 +451,7 @@ Generalized facts and concepts.
 Example:
 
 ```text
-The Bookish system uses separate writer, editor, planner, researcher, humanizer, fact-checker, and world-builder agents.
+The Bookish system uses separate planner, researcher, world-builder, writer, and editor agents.
 ```
 
 ### Procedural Memory
@@ -2218,8 +2218,6 @@ User Request
 -> World Builder Agent
 -> Writer Agent
 -> Editor Agent
--> Humanizer Agent
--> Fact Checker Agent
 -> Final Assembler
 ```
 
@@ -2268,24 +2266,7 @@ Responsibilities:
 - Remove repetition.
 - Improve clarity.
 - Enforce style.
-
-## Humanizer Agent
-
-Responsibilities:
-
-- Make prose less mechanical.
-- Add rhythm and variation.
-- Improve emotional texture.
-- Preserve meaning.
-
-## Fact Checker Agent
-
-Responsibilities:
-
-- Verify claims.
-- Check citations.
-- Mark unsupported statements.
-- Suggest corrections.
+- Check continuity and source consistency.
 
 ## Shared Stores
 
@@ -2716,8 +2697,6 @@ User
 -> World Builder
 -> Writer
 -> Editor
--> Humanizer
--> Fact Checker
 -> Final Composer
 -> Trace + Eval + Memory Update
 ```

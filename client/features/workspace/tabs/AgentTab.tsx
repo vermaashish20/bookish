@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookProject,
   ChatMessage,
@@ -12,6 +12,7 @@ import {
 import type { LangGraphTask } from '@/lib/types/langgraph';
 import AgentAssistant from '@/components/workspace/AgentAssistant';
 import PreviewCanvas from '@/components/workspace/PreviewCanvas';
+import { fetchArtifact } from '@/lib/api';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
   Boolean((chapter.content ?? '').trim()) ||
@@ -19,7 +20,7 @@ const isDisplayReadyChapter = (chapter: ChapterItem) =>
   chapter.status === 'completed' ||
   chapter.status === 'published';
 
-const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content', 'humanized_content']);
+const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content']);
 
 function formatAgentName(agentName: string) {
   return agentName
@@ -81,6 +82,7 @@ export default function AgentTab({
 }: AgentTabProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [selectedPreviewPage, setSelectedPreviewPage] = useState(1);
+  const [hydratedArtifact, setHydratedArtifact] = useState<GeneratedArtifact | null>(null);
   const artifacts = book.artifacts ?? [];
   const artifactItems = artifacts.map(artifactToDecisionItem);
   const previewChapter = book.chapters.find(isDisplayReadyChapter) || book.chapters[0];
@@ -90,11 +92,33 @@ export default function AgentTab({
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .at(-1) ?? null;
   const activePreview = !streamedDocumentText ? latestArtifact : null;
+  const activePreviewArtifact =
+    activePreview && hydratedArtifact && hydratedArtifact.id === activePreview.artifactId
+      ? { ...activePreview, artifactContent: hydratedArtifact.content ?? activePreview.artifactContent }
+      : activePreview;
   const previewChapterForCanvas =
-    activePreview && !WRITING_ARTIFACT_TYPES.has(activePreview.artifactType ?? '')
+    activePreviewArtifact && !WRITING_ARTIFACT_TYPES.has(activePreviewArtifact.artifactType ?? '')
       ? undefined
       : previewChapter;
   const hasPreview = Boolean(streamedDocumentText || activePreview || previewChapterForCanvas);
+
+  useEffect(() => {
+    if (!isPreviewOpen || !activePreview?.artifactId) return;
+    if (hydratedArtifact?.id === activePreview.artifactId || activePreview.artifactContent) return;
+
+    let cancelled = false;
+    fetchArtifact(book.id, activePreview.artifactId)
+      .then((artifact) => {
+        if (!cancelled) setHydratedArtifact(artifact);
+      })
+      .catch(() => {
+        if (!cancelled) setHydratedArtifact(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePreview, book.id, hydratedArtifact, isPreviewOpen]);
 
   return (
     <div className="relative flex flex-1 overflow-hidden bg-zinc-100">
@@ -145,7 +169,7 @@ export default function AgentTab({
               setSelectedPage={setSelectedPreviewPage}
               bookTitle={book.title}
               streamedDocumentText={streamedDocumentText}
-              activePreviewArtifact={activePreview}
+              activePreviewArtifact={activePreviewArtifact}
             />
           </div>
         </aside>

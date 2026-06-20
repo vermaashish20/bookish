@@ -24,8 +24,6 @@ class ProjectSettings(BaseModel):
     writerModel:       ModelConfig = Field(default_factory=ModelConfig)
     researcherModel:   ModelConfig = Field(default_factory=ModelConfig)
     editorModel:       ModelConfig = Field(default_factory=ModelConfig)
-    factCheckerModel:  ModelConfig = Field(default_factory=ModelConfig)
-    humanizerModel:    ModelConfig = Field(default_factory=ModelConfig)
     worldBuilderModel: ModelConfig = Field(default_factory=ModelConfig)
 
 

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import List, Optional
 
 from app.core.telemetry import langfuse_observation, update_observation
-from app.infrastructure.database.mongo import get_db
 from app.infrastructure.vector.store import query_documents
 from app.knowledge.schemas import KnowledgeHit, KnowledgeSearchResult
 from app.knowledge.scopes import collections_for_scopes, metadata_filter_for_scopes, normalize_scopes
@@ -27,34 +25,6 @@ def _suggest_query(query: str, scopes: List[str]) -> Optional[str]:
         return None
     scope_hint = ", ".join(scopes[:3])
     return f"{query} {scope_hint}".strip()
-
-
-def _log_retrieval(
-    *,
-    project_id: str,
-    run_id: Optional[str],
-    agent: Optional[str],
-    task: Optional[str],
-    tool_name: str,
-    result: KnowledgeSearchResult,
-) -> None:
-    db = get_db()
-    db.retrieval_logs.insert_one({
-        "projectId": project_id,
-        "runId": run_id,
-        "agent": agent,
-        "task": task,
-        "toolName": tool_name,
-        "scopes": result["scopes"],
-        "query": result["query"],
-        "intent": result["intent"],
-        "resultIds": [hit["id"] for hit in result["results"]],
-        "scores": [hit["score"] for hit in result["results"]],
-        "relevance": result["relevance"],
-        "coverage": result["coverage"],
-        "shouldRetrieveAgain": result["shouldRetrieveAgain"],
-        "createdAt": datetime.utcnow().isoformat(),
-    })
 
 
 def search_knowledge(
@@ -153,16 +123,6 @@ def search_knowledge(
                 "resultCount": len(final_hits),
             },
         )
-
-        if log:
-            _log_retrieval(
-                project_id=project_id,
-                run_id=run_id,
-                agent=agent,
-                task=task,
-                tool_name="search_knowledge",
-                result=result,
-            )
 
         return result
 

@@ -7,13 +7,19 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 TaskAgent = Literal[
     "researcher",
     "writer",
-    "fact_checker",
-    "humanizer",
     "editor",
     "world_builder",
 ]
 TaskStatusName = Literal["pending", "running", "completed", "failed", "rejected"]
 RunStatusName = Literal["pending", "running", "awaiting_approval", "completed", "failed", "rejected"]
+PendingWriteKind = Literal[
+    "chapter_create",
+    "chapter_update",
+    "character_create",
+    "character_update",
+    "entity_create",
+    "entity_update",
+]
 
 
 class ProjectContext(TypedDict, total=False):
@@ -45,6 +51,21 @@ class PlanApproval(TypedDict, total=False):
     response: Any
 
 
+class PendingWrite(TypedDict, total=False):
+    kind: PendingWriteKind
+    agent: TaskAgent
+    task: str
+    taskIndex: int
+    artifactId: str
+    targetCollection: str
+    operation: Literal["insert", "update"]
+    targetId: Optional[str]
+    payload: Dict[str, Any]
+    preview: str
+    status: Literal["pending", "approved", "rejected", "committed"]
+    response: Any
+
+
 class BookishAgentState(TypedDict, total=False):
     projectId: str
     chatSessionId: str
@@ -58,11 +79,10 @@ class BookishAgentState(TypedDict, total=False):
     tasks: List[AgentTask]
     currentTaskIndex: int
     approval: Optional[PlanApproval]
+    pendingWrite: Optional[PendingWrite]
 
     researchNotes: Optional[str]
-    factCheckReport: Optional[str]
     draftContent: Optional[str]
-    humanizedContent: Optional[str]
     editedContent: Optional[str]
     worldBuildingNotes: Optional[str]
     artifactIds: List[str]

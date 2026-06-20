@@ -14,7 +14,7 @@ export default function AgentMemoryStores({ book, selectedPreviewItem, setSelect
     <div className="space-y-5 font-sans max-w-3xl">
       <div>
         <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Orchestrator Memories</h3>
-        <p className="text-[10px] text-zinc-500 mt-0.5">Cognitive indexes compiled during planning, fact checking, and style matrices scanning.</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5">Cognitive indexes compiled during planning, continuity review, and style matrices scanning.</p>
       </div>
 
       <div className="space-y-4">

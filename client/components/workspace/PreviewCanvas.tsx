@@ -53,7 +53,7 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
   const contentToDisplay = formatContentForPreview(rawContent);
 
   const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? 'Writer' : 'Writer');
-  const shouldPaginate = ['Writer', 'Editor', 'Humanizer'].includes(currentAgent) || (!activePreviewArtifact && chapter);
+  const shouldPaginate = ['Writer', 'Editor'].includes(currentAgent) || (!activePreviewArtifact && chapter);
 
   const previewChunks = shouldPaginate
     ? (contentToDisplay.match(/[\s\S]{1,2200}/g) || [])

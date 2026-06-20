@@ -9,7 +9,7 @@ from app.agent.utils.state import BookishAgentState
 from app.agent.utils.streaming import emit_custom
 from app.repositories.agent_runs import add_agent_execution, update_agent_execution
 from app.repositories.artifacts import create_artifact
-from app.repositories.chapters import add_chapter, get_project_chapters
+from app.repositories.chapters import get_project_chapters
 
 
 WRITER_SYSTEM_PROMPT = """You are Bookish's writer agent.
@@ -39,7 +39,6 @@ def writer_node(state: BookishAgentState) -> dict[str, Any]:
 
     project_context = state.get("projectContext", {})
     research_notes = state.get("researchNotes") or "No separate research notes were produced."
-    fact_check_report = state.get("factCheckReport") or "No fact-check report was produced yet."
     fallback = (
         f"# Draft\n\nDraft for: {task['task']}\n\n"
         "Configure the selected writer model credentials to generate full prose."
@@ -61,9 +60,6 @@ Story so far: {project_context.get('bookSummary') or 'The story has not started 
 RESEARCH NOTES:
 {research_notes}
 
-FACT CHECK REPORT:
-{fact_check_report}
-
 Write the requested content as Markdown. Target 500-1000 words when drafting a scene or chapter.
 """.strip(),
         default_fallback=fallback,
@@ -83,21 +79,30 @@ Write the requested content as Markdown. Target 500-1000 words when drafting a s
     next_number = len(existing_chapters) + 1
     first_line = draft.splitlines()[0].replace("#", "").replace("*", "").strip() if draft.splitlines() else ""
     title = first_line if first_line.lower().startswith("chapter") else f"Chapter {next_number}"
-    chapter_id = add_chapter(
-        project_id=state["projectId"],
-        number=next_number,
-        title=title,
-        content=draft,
-        word_count=word_count,
-        status="draft",
-    )
+    pending_write = {
+        "kind": "chapter_create",
+        "agent": "writer",
+        "task": task["task"],
+        "taskIndex": idx,
+        "artifactId": artifact_id,
+        "targetCollection": "chapters",
+        "operation": "insert",
+        "payload": {
+            "number": next_number,
+            "title": title,
+            "content": draft,
+            "wordCount": word_count,
+            "status": "draft",
+        },
+        "preview": draft[:1200],
+        "status": "pending",
+    }
 
     completed_at = datetime.utcnow().isoformat()
     task.update(
         status="completed",
         completedAt=completed_at,
         outputArtifactId=artifact_id,
-        chapterId=chapter_id,
     )
     tasks[idx] = task
     update_agent_execution(
@@ -113,11 +118,7 @@ Write the requested content as Markdown. Target 500-1000 words when drafting a s
         agent="writer",
         artifactType="draft",
     )
-    emit_custom(
-        "chapter_upserted",
-        runId=state["agentRunId"],
-        chapterId=chapter_id,
-    )
+    emit_custom("write_proposed", runId=state["agentRunId"], agent="writer", pendingWrite=pending_write)
     emit_custom("task_completed", runId=state["agentRunId"], agent="writer", task=task)
 
     return {
@@ -125,5 +126,6 @@ Write the requested content as Markdown. Target 500-1000 words when drafting a s
         "currentTaskIndex": idx + 1,
         "draftContent": draft,
         "artifactIds": [*state.get("artifactIds", []), artifact_id],
+        "pendingWrite": pending_write,
     }
 

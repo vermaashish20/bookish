@@ -65,8 +65,6 @@ server/
 │   │       │   ├── planner.py
 │   │       │   ├── researcher.py
 │   │       │   ├── writer.py
-│   │       │   ├── fact_checker.py
-│   │       │   ├── humanizer.py
 │   │       │   ├── editor.py
 │   │       │   ├── world_builder.py
 │   │       │   └── finalize.py
@@ -275,5 +273,5 @@ Start with the smallest vertical slice:
 2. Create a checkpointed graph with planner approval interrupt and one writer/researcher tool path.
 3. Add a new streaming endpoint that emits LangGraph v2 stream parts.
 4. Build a temporary frontend panel using `@langchain/react` `useStream`.
-5. Once the slice proves checkpoint, interrupt, resume, and streaming, migrate the rest of the specialist nodes.
+5. Once the slice proves checkpoint, interrupt, resume, and streaming, migrate the rest of the agent nodes.
 
