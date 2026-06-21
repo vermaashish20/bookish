@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { uploadAsset, uploadAssetFile } from '@/lib/api';
-import type { Asset, PreviewItem, WorkspaceTab } from '@/lib/types';
+import type { Asset, MemorySubTab, PreviewItem, WorkspaceTab } from '@/lib/types';
 import AddAssetModal from '@/components/workspace/AddAssetModal';
 import AgentTab from '@/features/workspace/tabs/AgentTab';
 import BookTab from '@/features/workspace/tabs/BookTab';
@@ -13,11 +13,9 @@ import { useAgentStream } from '@/features/workspace/hooks/useAgentStream';
 import { useModelSettings } from '@/features/workspace/hooks/useModelSettings';
 import { useProject } from '@/features/workspace/hooks/useProject';
 
-type MemorySubTab = 'User' | 'AgentMemory' | 'Timeline';
-
 export function WorkspaceView({ projectId }: { projectId: string }) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('Agent');
-  const [memorySubTab, setMemorySubTab] = useState<MemorySubTab>('User');
+  const [memorySubTab, setMemorySubTab] = useState<MemorySubTab>('Sources');
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<PreviewItem | null>(null);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(true);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
@@ -160,6 +158,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               pendingConfirmation={chat.pendingConfirmation}
               onResume={chat.resume}
               streamedDocumentText={chat.streamedDocumentText}
+              streamedArtifactType={chat.streamedArtifactType}
               chatSessions={chatSessions}
               activeChatSessionId={activeChatSessionId ?? ''}
               onSwitchChatSession={switchChatSession}
@@ -283,7 +282,7 @@ function WorkspaceSidebar({
     {
       id: 'Memory',
       label: 'Memory',
-      title: 'Assets & bible',
+      title: 'Sources & canon',
       icon: (
         <path
           strokeLinecap="round"

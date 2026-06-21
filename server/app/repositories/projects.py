@@ -7,8 +7,46 @@ from app.repositories.assets import get_project_assets
 from app.repositories.chapters import get_project_chapters
 from app.repositories.characters import get_project_characters
 from app.repositories.entities import get_project_entities
-from app.repositories.agent_runs import get_project_agent_runs
 from app.repositories.artifacts import get_project_artifacts
+
+
+def _format_character_for_memory(character: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": character.get("id") or character.get("_id"),
+        "name": character.get("name", "Unnamed Character"),
+        "role": character.get("role", ""),
+        "arc": character.get("arc", ""),
+        "activeChapters": character.get("activeChapters", []),
+        "attributes": character.get("attributes", {}),
+        "status": character.get("status", "draft"),
+    }
+
+
+def _format_entity_for_memory(entity: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": entity.get("id") or entity.get("_id"),
+        "name": entity.get("name", "Unnamed Entity"),
+        "type": entity.get("type", "concept"),
+        "description": entity.get("description", ""),
+        "attributes": entity.get("attributes", {}),
+        "status": entity.get("status", "draft"),
+    }
+
+
+def build_project_memory_payload(project: Dict[str, Any], characters: List[Dict[str, Any]], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Structured memory block for the workspace Memory tab."""
+    return {
+        "projectVoice": {
+            "genre": project.get("genre", ""),
+            "tonality": project.get("tonality", "Conversational"),
+            "bookSummary": project.get("bookSummary", ""),
+            "readerProfile": project.get("readerProfile", ""),
+            "targetWordCount": project.get("targetWordCount"),
+            "forbiddenPhrases": project.get("forbiddenPhrases", []),
+        },
+        "characters": [_format_character_for_memory(c) for c in characters],
+        "worldEntities": [_format_entity_for_memory(e) for e in entities],
+    }
 
 
 DEFAULT_PROJECT_SETTINGS: Dict[str, Any] = {
@@ -49,62 +87,6 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     assets = get_project_assets(project_id)
     artifacts = get_project_artifacts(project_id, include_content=False)
 
-    tonality_key = str(p.get("tonality", "")).lower()
-    tonality_scores = {
-        "conversational": 1.0 if tonality_key == "conversational" else 0.0,
-        "academic":       1.0 if tonality_key == "academic"       else 0.0,
-        "storyteller":    1.0 if tonality_key == "storyteller"    else 0.0,
-        "motivational":   1.0 if tonality_key == "motivational"   else 0.0,
-        "witty":          1.0 if tonality_key == "witty"          else 0.0,
-    }
-
-    # Build decisionLog from agent_runs
-    agent_runs = get_project_agent_runs(project_id)
-    decision_log = []
-
-    for run in reversed(agent_runs):
-        if run.get("plannerDecision"):
-            decision_log.append({
-                "timestamp":  run.get("startedAt", ""),
-                "step":       "Planning",
-                "agent":      "Planner",
-                "action":     "Created execution plan",
-                "resolution": run["plannerDecision"].get("decision", "Task analysis complete"),
-            })
-
-        for exec_item in run.get("agentExecutions", []):
-            status = exec_item.get("status", "")
-            decision_item = {
-                "timestamp":  exec_item.get("startedAt") or run.get("startedAt", ""),
-                "step":       "Execution",
-                "agent":      exec_item.get("agent", "Agent").capitalize(),
-                "action":     (exec_item.get("taskInput", "Task") or "")[:80] + "…",
-                "resolution": f"[{status.upper()}]",
-            }
-            artifact_id = exec_item.get("outputArtifactId")
-            if artifact_id:
-                from app.repositories.artifacts import get_artifact
-                artifact = get_artifact(artifact_id)
-                if artifact:
-                    decision_item["artifactId"]      = artifact_id
-                    decision_item["artifactType"]    = artifact.get("artifactType", "")
-            decision_log.append(decision_item)
-
-    entity_bible = [
-        {
-            "id": e.get("id") or e.get("_id"),
-            "name": e.get("name", "Unnamed Entity"),
-            "role": e.get("type", "entity"),
-            "type": e.get("type", "entity"),
-            "description": e.get("description", ""),
-            "arc": e.get("description", ""),
-            "activeChapters": [],
-            "attributes": e.get("attributes", {}),
-            "status": e.get("status", "draft"),
-        }
-        for e in entities
-    ]
-
     has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
 
     return {
@@ -114,6 +96,8 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "genre":     p.get("genre", ""),
         "brief":     assets[0]["content"] if assets else "",
         "tonality":  p["tonality"],
+        "readerProfile": p.get("readerProfile", ""),
+        "targetWordCount": p.get("targetWordCount"),
         "status":    "Reviewing" if has_published else "Planning",
         "createdAt": p["createdAt"],
         "bookSummary": p.get("bookSummary", ""),
@@ -121,17 +105,7 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "assets":    assets,
         "artifacts": artifacts,
         "settings":  p.get("settings", {}),
-        "memory": {
-            "factRegistry":    [],
-            "characterBible":  characters + entity_bible,
-            "callbackIndex":   [],    # kept for frontend schema compat; always empty now
-            "tonalityFingerprint": {
-                "preset": p["tonality"],
-                **tonality_scores,
-                "forbiddenPhrases": [],
-            },
-            "decisionLog": decision_log,
-        },
+        "memory": build_project_memory_payload(p, characters, entities),
     }
 
 

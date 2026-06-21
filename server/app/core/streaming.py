@@ -54,15 +54,5 @@ def publish_sync_event(event_type: str, **payload: Any) -> None:
     publish_event({"event": "sync_event", "type": event_type, **payload})
 
 
-def publish_timeline_snapshot(project_id: str) -> None:
-    """Publish the current execution timeline derived from agent runs."""
-    from app.repositories.projects import get_unified_project_payload
-
-    project_payload = get_unified_project_payload(project_id)
-    if project_payload:
-        decision_log = project_payload.get("memory", {}).get("decisionLog", [])
-        publish_sync_event("timeline_updated", decisionLog=decision_log)
-
-
 def encode_sse(event: StreamEvent) -> str:
     return f"data: {json.dumps(event, default=str)}\n\n"

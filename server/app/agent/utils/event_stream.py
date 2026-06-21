@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 # Channels forwarded to the Bookish UI SSE stream.
+# Parent graph must call astream(..., subgraphs=True) so custom/tasks events
+# from the compiled plan subgraph bubble up to the frontend.
 UI_STREAM_MODES = frozenset({"custom", "tasks"})
 
 

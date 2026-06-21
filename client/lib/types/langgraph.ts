@@ -19,6 +19,13 @@ export type LangGraphInterrupt = {
   summary?: string;
   prompt?: string;
   tasks?: LangGraphTask[];
+  pendingWrite?: {
+    preview?: string;
+    content?: string;
+    agent?: string;
+    artifactId?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type LangGraphCustomPayload = {
@@ -33,6 +40,8 @@ export type LangGraphCustomPayload = {
   artifactType?: string;
   contentPreview?: string;
   pendingWrite?: unknown;
+  delta?: string;
+  target?: 'chat' | 'preview';
   [key: string]: unknown;
 };
 

@@ -16,6 +16,11 @@ export default function BookTab({ book, streamedDocumentText }: BookTabProps) {
   const [activeBookSection, setActiveBookSection] = useState<string>(
     firstChapterId ?? 'title-page',
   );
+  const [selectedPage, setSelectedPage] = useState(1);
+
+  useEffect(() => {
+    setSelectedPage(1);
+  }, [activeBookSection]);
 
   useEffect(() => {
     if (!hasAutoSelectedChapter.current && firstChapterId) {
@@ -33,15 +38,27 @@ export default function BookTab({ book, streamedDocumentText }: BookTabProps) {
     0
   );
 
+  const selectSection = (section: string, page = 1) => {
+    setActiveBookSection(section);
+    setSelectedPage(page);
+  };
+
   return (
     <div className="flex-1 flex overflow-hidden">
       <BookOutline
         chapters={book.chapters}
         activeSection={activeBookSection}
-        setActiveSection={setActiveBookSection}
+        selectedPage={selectedPage}
+        onSelectSection={selectSection}
         totalWordCount={totalWordCount}
       />
-      <BookEditor book={book} activeSection={activeBookSection} streamedDocumentText={streamedDocumentText} />
+      <BookEditor
+        book={book}
+        activeSection={activeBookSection}
+        streamedDocumentText={streamedDocumentText}
+        selectedPage={selectedPage}
+        setSelectedPage={setSelectedPage}
+      />
     </div>
   );
 }

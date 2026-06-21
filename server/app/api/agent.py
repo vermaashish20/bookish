@@ -50,7 +50,12 @@ def create_thread(payload: ThreadCreatePayload) -> Dict[str, str]:
 async def stream_thread_run(thread_id: str, payload: RunStreamPayload):
     graph_input, project_id = _build_graph_input(thread_id, payload)
     config = {"configurable": {"thread_id": thread_id}}
-    context = build_bookish_context(project_id, agent_run_id=_extract_run_id(graph_input))
+    agent_run_id = _extract_run_id(graph_input)
+    if isinstance(graph_input, Command):
+        checkpoint_state = await graph.aget_state(config)
+        if checkpoint_state and checkpoint_state.values:
+            agent_run_id = str(checkpoint_state.values.get("agentRunId") or agent_run_id)
+    context = build_bookish_context(project_id, agent_run_id=agent_run_id)
 
     return StreamingResponse(
         _stream_graph_parts(graph_input, config, context),
@@ -137,6 +142,7 @@ async def _stream_graph_parts(
                 config=trace_config,
                 context=context,
                 stream_mode=list(UI_STREAM_MODES),
+                subgraphs=True,
                 version="v2",
             ):
                 if run_interrupted(part):

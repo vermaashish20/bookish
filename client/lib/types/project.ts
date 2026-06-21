@@ -17,43 +17,32 @@ export interface Asset {
   content?: string;
 }
 
-export interface FactItem {
-  id: string;
-  assertion: string;
-  source: string;
-  verifiedBy: string;
-  timestamp: string;
-}
-
-export interface CharacterBibleItem {
+export interface CharacterItem {
   id: string;
   name: string;
   role: string;
-  type?: string;
-  description?: string;
-  attributes: Record<string, unknown>;
   arc: string;
   activeChapters: number[];
+  attributes: Record<string, unknown>;
   status?: string;
 }
 
-export interface CallbackItem {
+export interface WorldEntityItem {
   id: string;
-  setupChapter: number;
-  payoffChapter: number;
-  context: string;
-  resolved: boolean;
+  name: string;
+  type: string;
+  description?: string;
+  attributes: Record<string, unknown>;
+  status?: string;
 }
 
-export interface DecisionItem {
-  timestamp: string;
-  step: string;
-  agent: string;
-  action: string;
-  resolution: string;
-  artifactId?: string;
-  artifactType?: string;
-  artifactContent?: string;
+export interface ProjectVoice {
+  genre: string;
+  tonality: string;
+  bookSummary?: string;
+  readerProfile?: string;
+  targetWordCount?: number;
+  forbiddenPhrases?: string[];
 }
 
 export interface GeneratedArtifact {
@@ -68,22 +57,25 @@ export interface GeneratedArtifact {
   createdAt: string;
 }
 
-export interface TonalityFingerprint {
-  preset: string;
-  conversational: number;
-  academic: number;
-  storyteller: number;
-  motivational: number;
-  witty: number;
-  forbiddenPhrases: string[];
+/** Artifact preview shape used in the Agent tab preview panel. */
+export interface ArtifactPreviewItem {
+  timestamp: string;
+  step: string;
+  agent: string;
+  action: string;
+  resolution: string;
+  artifactId?: string;
+  artifactType?: string;
+  artifactContent?: string;
 }
 
+/** @deprecated Use ArtifactPreviewItem — kept for Agent tab artifact preview. */
+export type DecisionItem = ArtifactPreviewItem;
+
 export interface MemoryState {
-  factRegistry: FactItem[];
-  characterBible: CharacterBibleItem[];
-  callbackIndex: CallbackItem[];
-  tonalityFingerprint: TonalityFingerprint;
-  decisionLog: DecisionItem[];
+  projectVoice: ProjectVoice;
+  characters: CharacterItem[];
+  worldEntities: WorldEntityItem[];
 }
 
 export type LLMProvider =
@@ -118,6 +110,7 @@ export interface BookProject {
   tonality: 'Conversational' | 'Academic' | 'Storyteller' | 'Motivational' | 'Witty';
   brief: string;
   readerProfile?: string;
+  bookSummary?: string;
   status: 'Drafting' | 'Reviewing' | 'Fact-Checking' | 'Humanizing' | 'Completed' | 'Ready' | string;
   createdAt: string;
   chapters: ChapterItem[];
@@ -146,7 +139,7 @@ export interface ChatSession {
 }
 
 export type PreviewItem = {
-  type: 'user_asset' | 'fact' | 'character' | 'callback' | 'style' | 'timeline' | 'artifact';
+  type: 'user_asset' | 'character' | 'world_entity' | 'chapter' | 'project_voice' | 'artifact';
   id: string;
   title: string;
   subtitle?: string;
@@ -155,3 +148,5 @@ export type PreviewItem = {
 };
 
 export type WorkspaceTab = 'Agent' | 'Book' | 'Memory' | 'Settings';
+
+export type MemorySubTab = 'Sources' | 'Knowledge';

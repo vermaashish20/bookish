@@ -43,7 +43,14 @@ function interruptValue(item: unknown): LangGraphInterrupt | null {
   if (!value || typeof value !== 'object') return null;
   const payload = value as LangGraphInterrupt;
   if (payload.kind === 'write_approval' || payload.kind === 'plan_approval') {
-    return payload;
+    return {
+      ...payload,
+      pendingWrite:
+        payload.pendingWrite ??
+        (typeof (value as Record<string, unknown>).pendingWrite === 'object'
+          ? ((value as Record<string, unknown>).pendingWrite as LangGraphInterrupt['pendingWrite'])
+          : undefined),
+    };
   }
   return null;
 }
@@ -89,6 +96,8 @@ export type CustomEventEffects = {
   chatText?: string;
   statusText?: string;
   previewText?: string;
+  textDelta?: string;
+  streamTarget?: 'chat' | 'preview';
   clearPreview?: boolean;
   projectState?: BookProject;
   pendingConfirmation?: {
@@ -103,6 +112,15 @@ export function effectsFromCustomPayload(payload: LangGraphCustomPayload): Custo
   const effects: CustomEventEffects = {};
 
   switch (payload.kind) {
+    case 'text_delta': {
+      const delta = typeof payload.delta === 'string' ? payload.delta : '';
+      const target = payload.target === 'preview' ? 'preview' : 'chat';
+      if (delta) {
+        effects.textDelta = delta;
+        effects.streamTarget = target;
+      }
+      break;
+    }
     case 'plan_created':
       effects.chatText = payload.summary ?? 'Plan created.';
       effects.statusText = 'Plan created.';
@@ -115,12 +133,11 @@ export function effectsFromCustomPayload(payload: LangGraphCustomPayload): Custo
       break;
     case 'write_proposed': {
       const pendingWrite = payload.pendingWrite;
-      const preview =
-        pendingWrite && typeof pendingWrite === 'object'
-          ? (pendingWrite as { preview?: unknown }).preview
-          : undefined;
-      if (typeof preview === 'string') {
-        effects.previewText = preview;
+      if (pendingWrite && typeof pendingWrite === 'object') {
+        const pw = pendingWrite as { content?: unknown; preview?: unknown };
+        const full = typeof pw.content === 'string' ? pw.content : undefined;
+        const short = typeof pw.preview === 'string' ? pw.preview : undefined;
+        effects.previewText = full || short;
       }
       break;
     }
@@ -145,6 +162,11 @@ export function effectsFromCustomPayload(payload: LangGraphCustomPayload): Custo
         effects.projectState = payload.projectState as BookProject;
       }
       effects.clearPreview = true;
+      break;
+    case 'project_updated':
+      if (payload.projectState) {
+        effects.projectState = payload.projectState as BookProject;
+      }
       break;
     default:
       break;

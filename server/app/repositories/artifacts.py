@@ -51,6 +51,21 @@ def get_artifact(artifact_id: str) -> Optional[Dict[str, Any]]:
     return artifact
 
 
+def attach_pending_write(artifact_id: str, pending_write: Dict[str, Any]) -> None:
+    """Persist HITL pending write on the artifact so approval can commit after resume."""
+    db = get_db()
+    snapshot = {key: value for key, value in pending_write.items() if key != "content"}
+    db.artifacts.update_one(
+        {"_id": artifact_id},
+        {
+            "$set": {
+                "metadata.pendingWrite": snapshot,
+                "metadata.task": pending_write.get("task", ""),
+            }
+        },
+    )
+
+
 def get_project_artifacts(
     project_id: str,
     agent_name: Optional[str] = None,

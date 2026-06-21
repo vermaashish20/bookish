@@ -1,4 +1,4 @@
-export const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content']);
+export const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content', 'world_building']);
 
 export function isToolCallPayload(text: string): boolean {
   const trimmed = text.trim();

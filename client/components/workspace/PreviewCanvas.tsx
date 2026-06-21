@@ -12,10 +12,11 @@ interface PreviewCanvasProps {
   setSelectedPage: (page: number) => void;
   bookTitle: string;
   streamedDocumentText?: string;
+  streamedArtifactType?: string;
   activePreviewArtifact?: DecisionItem | null;
 }
 
-export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, bookTitle, streamedDocumentText, activePreviewArtifact }: PreviewCanvasProps) {
+export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, bookTitle, streamedDocumentText, streamedArtifactType, activePreviewArtifact }: PreviewCanvasProps) {
   // Helper to strip JSON markdown and parse it into readable text
   const formatContentForPreview = (text: string) => {
     if (!text.trim() || isToolCallPayload(text)) {
@@ -62,12 +63,16 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
 
   const rawContent = activePreviewArtifact?.artifactContent || streamedDocumentText || chapter?.content || '';
   const contentToDisplay = formatContentForPreview(rawContent);
-  const artifactType = activePreviewArtifact?.artifactType ?? (streamedDocumentText ? 'draft' : undefined);
+  const artifactType =
+    activePreviewArtifact?.artifactType ?? (streamedDocumentText ? (streamedArtifactType ?? 'draft') : undefined);
   const hasRenderableContent = isPreviewableArtifactContent(contentToDisplay, artifactType) ||
     Boolean(!activePreviewArtifact && !streamedDocumentText && chapter?.content?.trim());
 
-  const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? 'Writer' : 'Writer');
-  const shouldPaginate = currentAgent === 'Writer' || (!activePreviewArtifact && chapter);
+  const isChapterPreview = artifactType === 'draft' || artifactType === 'edited_content';
+  const streamAgentLabel =
+    artifactType === 'world_building' ? 'World Builder' : 'Writer';
+  const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? streamAgentLabel : 'Writer');
+  const shouldPaginate = isChapterPreview && (currentAgent === 'Writer' || (!activePreviewArtifact && chapter));
 
   const previewChunks = shouldPaginate
     ? (contentToDisplay.match(/[\s\S]{1,2200}/g) || [])
@@ -146,7 +151,7 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
               <div className="flex justify-between items-center text-[9px] font-sans text-zinc-400 uppercase tracking-widest border-b border-zinc-100 pb-2 mb-6 shrink-0">
                 <span className="flex-1">{bookTitle}</span>
                 <span className="flex-1 text-center font-bold">
-                  {activePreviewArtifact ? activePreviewArtifact.agent : (streamedDocumentText ? 'Writer (Actively Writing)' : 'Writer')}
+                  {activePreviewArtifact ? activePreviewArtifact.agent : (streamedDocumentText ? streamAgentLabel : 'Writer')}
                 </span>
                 <span className="flex-1 text-right"></span>
               </div>

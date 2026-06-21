@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { BookProject, Asset } from '@/lib/types';
+import { BookProject, PreviewItem } from '@/lib/types';
 
 interface UserContextTimelineProps {
   book: BookProject;
-  selectedPreviewItem: any;
-  setSelectedPreviewItem: (item: any) => void;
+  selectedPreviewItem: PreviewItem | null;
+  setSelectedPreviewItem: (item: PreviewItem | null) => void;
   setIsAddAssetOpen: (open: boolean) => void;
 }
 
@@ -24,8 +24,8 @@ export default function UserContextTimeline({
     <div className="space-y-4 max-w-3xl">
       <div className="flex justify-between items-center font-sans">
         <div>
-          <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">User Context Timeline</h3>
-          <p className="text-[10px] text-zinc-500 mt-0.5">Timeline of initial briefs, guidelines, and in-between uploaded documents.</p>
+          <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Sources</h3>
+          <p className="text-[10px] text-zinc-500 mt-0.5">Initial brief, guidelines, and documents you uploaded for this book.</p>
         </div>
         <button
           type="button"

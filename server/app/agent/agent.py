@@ -1,4 +1,4 @@
-"""Compiled LangGraph-native Bookish agent — 3 nodes."""
+"""Compiled LangGraph-native Bookish agent — intent router + peer agents."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,13 +8,14 @@ from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import RunnableConfig
 
-from app.agent.nodes.planner import plan_node
+from app.agent.graphs.agent import planner_agent, world_builder_agent, writer_agent
+from app.agent.nodes.classify import classify_intent_node, route_by_intent
 from app.agent.utils.context_schema import BookishContext
 from app.agent.utils.memory import load_store_memory_node
 from app.agent.utils.persistence import build_checkpointer, build_store
 from app.agent.utils.state import BookishAgentState
 from app.agent.utils.streaming import emit_custom
-from app.repositories.agent_runs import complete_agent_run, fail_agent_run
+from app.repositories.agent_runs import complete_agent_run
 from app.repositories.artifacts import get_agent_run_artifacts
 from app.repositories.chat_messages import add_chat_message
 from app.repositories.projects import get_unified_project_payload
@@ -78,12 +79,26 @@ def build_graph(*, with_persistence: bool = False):
     workflow = StateGraph(BookishAgentState, context_schema=BookishContext)
 
     workflow.add_node("load_memory", load_store_memory_node)
-    workflow.add_node("plan", plan_node)
+    workflow.add_node("classify", classify_intent_node)
+    workflow.add_node("planner_agent", planner_agent)
+    workflow.add_node("writer_agent", writer_agent)
+    workflow.add_node("world_builder_agent", world_builder_agent)
     workflow.add_node("complete", complete_node)
 
     workflow.set_entry_point("load_memory")
-    workflow.add_edge("load_memory", "plan")
-    workflow.add_edge("plan", "complete")
+    workflow.add_edge("load_memory", "classify")
+    workflow.add_conditional_edges(
+        "classify",
+        route_by_intent,
+        {
+            "planner_agent": "planner_agent",
+            "writer_agent": "writer_agent",
+            "world_builder_agent": "world_builder_agent",
+        },
+    )
+    workflow.add_edge("planner_agent", "complete")
+    workflow.add_edge("writer_agent", "complete")
+    workflow.add_edge("world_builder_agent", "complete")
     workflow.add_edge("complete", END)
 
     if with_persistence:

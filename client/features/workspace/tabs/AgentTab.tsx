@@ -58,6 +58,7 @@ interface AgentTabProps {
   pendingConfirmation: { text: string, run_id: string, summary?: string, tasks?: LangGraphTask[] } | null;
   onResume: (decision: string) => void;
   streamedDocumentText?: string;
+  streamedArtifactType?: string;
   chatSessions: ChatSession[];
   activeChatSessionId: string;
   onSwitchChatSession: (sessionId: string) => void;
@@ -76,6 +77,7 @@ export default function AgentTab({
   pendingConfirmation,
   onResume,
   streamedDocumentText,
+  streamedArtifactType,
   chatSessions,
   activeChatSessionId,
   onSwitchChatSession,
@@ -105,7 +107,11 @@ export default function AgentTab({
       ? undefined
       : previewChapter;
   const hasPreview = Boolean(
-    (streamedDocumentText && isPreviewableArtifactContent(streamedDocumentText, 'draft')) ||
+    (streamedDocumentText &&
+      isPreviewableArtifactContent(
+        streamedDocumentText,
+        streamedArtifactType ?? 'draft',
+      )) ||
       activePreview ||
       previewChapterForCanvas,
   );
@@ -139,6 +145,8 @@ export default function AgentTab({
         onSendPrompt={onSendPrompt}
         pendingConfirmation={pendingConfirmation}
         onResume={onResume}
+        hasPreviewContent={Boolean(streamedDocumentText?.trim())}
+        onViewPreview={() => setIsPreviewOpen(true)}
         chatSessions={chatSessions}
         activeChatSessionId={activeChatSessionId}
         onSwitchChatSession={onSwitchChatSession}
@@ -177,6 +185,7 @@ export default function AgentTab({
               setSelectedPage={setSelectedPreviewPage}
               bookTitle={book.title}
               streamedDocumentText={streamedDocumentText}
+              streamedArtifactType={streamedArtifactType}
               activePreviewArtifact={activePreviewArtifact}
             />
           </div>

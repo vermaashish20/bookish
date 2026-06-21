@@ -40,6 +40,7 @@ type PendingConfirmation = {
   run_id: string;
   summary?: string;
   tasks?: LangGraphTask[];
+  hasPreview?: boolean;
 };
 
 interface AgentAssistantProps {
@@ -51,6 +52,8 @@ interface AgentAssistantProps {
   onSendPrompt: (e: React.FormEvent) => void;
   pendingConfirmation?: PendingConfirmation | null;
   onResume?: (decision: string) => void;
+  hasPreviewContent?: boolean;
+  onViewPreview?: () => void;
   chatSessions: ChatSession[];
   activeChatSessionId: string;
   onSwitchChatSession: (sessionId: string) => void;
@@ -85,6 +88,8 @@ export default function AgentAssistant({
   onSendPrompt,
   pendingConfirmation,
   onResume,
+  hasPreviewContent,
+  onViewPreview,
 }: AgentAssistantProps) {
   const submitPromptInput = (_message: { text: string }, event: React.FormEvent<HTMLFormElement>) => {
     onSendPrompt(event);
@@ -173,7 +178,12 @@ export default function AgentAssistant({
         <div className="bg-white px-4 pb-3 pt-1">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
             {pendingConfirmation && (
-              <ApprovalCard confirmation={pendingConfirmation} onResume={onResume} />
+              <ApprovalCard
+                confirmation={pendingConfirmation}
+                onResume={onResume}
+                hasPreviewContent={hasPreviewContent}
+                onViewPreview={onViewPreview}
+              />
             )}
             <PromptInput
               className="overflow-hidden rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 !shadow-none !ring-0 outline-none focus-within:border-zinc-400 focus-within:!ring-0 has-[[data-slot=input-group-control]:focus-visible]:!ring-0 [&_[data-slot=input-group]]:rounded-full [&_[data-slot=input-group]]:!border-0 [&_[data-slot=input-group]]:bg-transparent [&_[data-slot=input-group]]:!shadow-none [&_[data-slot=input-group]]:!ring-0"
@@ -204,12 +214,17 @@ export default function AgentAssistant({
 function ApprovalCard({
   confirmation,
   onResume,
+  hasPreviewContent,
+  onViewPreview,
 }: {
   confirmation: PendingConfirmation;
   onResume?: (decision: string) => void;
+  hasPreviewContent?: boolean;
+  onViewPreview?: () => void;
 }) {
   const firstTask = confirmation.tasks?.[0];
   const taskLabel = firstTask?.agent ? `Node: ${firstTask.agent}` : confirmation.text;
+  const showView = Boolean(hasPreviewContent || confirmation.hasPreview);
 
   return (
     <Confirmation
@@ -228,9 +243,24 @@ function ApprovalCard({
               {confirmation.summary}
             </span>
           )}
+          {showView && (
+            <span className="mt-1 block text-xs text-zinc-500">
+              A draft is ready to review before you approve.
+            </span>
+          )}
         </ConfirmationRequest>
       </ConfirmationTitle>
       <ConfirmationActions>
+        {showView && (
+          <ConfirmationAction
+            type="button"
+            variant="outline"
+            onClick={() => onViewPreview?.()}
+            className="h-9 rounded-xl px-4 text-sm"
+          >
+            View
+          </ConfirmationAction>
+        )}
         <ConfirmationAction
           type="button"
           variant="outline"

@@ -18,6 +18,7 @@ type PendingConfirmation = {
   run_id: string;
   summary?: string;
   tasks?: LangGraphCustomPayload['tasks'];
+  hasPreview?: boolean;
 };
 
 export function useAgentStream(
@@ -31,10 +32,13 @@ export function useAgentStream(
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [currentAgentStatus, setCurrentAgentStatus] = useState('');
   const [streamedDocumentText, setStreamedDocumentText] = useState('');
+  const [streamedArtifactType, setStreamedArtifactType] = useState<string>('draft');
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
   const threadIdRef = useRef<string | null>(null);
   const assistantMessageIdRef = useRef<string | null>(null);
+  const chatStreamBufferRef = useRef('');
+  const previewStreamBufferRef = useRef('');
 
   const updateAssistantMessage = useCallback(
     (messageId: string, text: string) => {
@@ -49,16 +53,38 @@ export function useAgentStream(
     [setChatMessages],
   );
 
+  const resetStreamBuffers = useCallback(() => {
+    chatStreamBufferRef.current = '';
+    previewStreamBufferRef.current = '';
+  }, []);
+
   const applyCustomPayload = useCallback(
     (payload: LangGraphCustomPayload) => {
       const effects = effectsFromCustomPayload(payload);
       const messageId = assistantMessageIdRef.current;
 
+      if (effects.textDelta && effects.streamTarget === 'chat' && messageId) {
+        chatStreamBufferRef.current += effects.textDelta;
+        updateAssistantMessage(messageId, chatStreamBufferRef.current);
+      }
+      if (effects.textDelta && effects.streamTarget === 'preview') {
+        previewStreamBufferRef.current += effects.textDelta;
+        setStreamedDocumentText(previewStreamBufferRef.current);
+      }
       if (effects.chatText && messageId) {
+        chatStreamBufferRef.current = effects.chatText;
         updateAssistantMessage(messageId, effects.chatText);
       }
       if (effects.statusText) {
         setCurrentAgentStatus(effects.statusText);
+      }
+      if (payload.kind === 'task_started' && payload.agent === 'world_builder') {
+        setStreamedArtifactType('world_building');
+      } else if (payload.kind === 'task_started' && payload.agent === 'writer') {
+        setStreamedArtifactType('draft');
+      }
+      if (payload.kind === 'artifact_created' && payload.artifactType) {
+        setStreamedArtifactType(String(payload.artifactType));
       }
       if (effects.previewText) {
         const artifactType =
@@ -66,10 +92,17 @@ export function useAgentStream(
             ? String(payload.artifactType ?? '')
             : 'draft';
         if (isPreviewableArtifactContent(effects.previewText, artifactType)) {
-          setStreamedDocumentText(effects.previewText);
+          const incoming = effects.previewText;
+          const current = previewStreamBufferRef.current;
+          // Keep streamed content; only fill in when buffer is empty or incoming is fuller.
+          if (!current.trim() || incoming.length >= current.length) {
+            previewStreamBufferRef.current = incoming;
+            setStreamedDocumentText(incoming);
+          }
         }
       }
       if (effects.clearPreview) {
+        previewStreamBufferRef.current = '';
         setStreamedDocumentText('');
       }
       if (effects.projectState) {
@@ -84,11 +117,35 @@ export function useAgentStream(
   const applyInterrupt = useCallback(
     (interrupt: LangGraphInterrupt) => {
       if (interrupt.threadId) threadIdRef.current = interrupt.threadId;
+
+      const pendingWrite = interrupt.pendingWrite;
+      const interruptFull =
+        pendingWrite && typeof pendingWrite.content === 'string'
+          ? pendingWrite.content
+          : '';
+      const interruptPreview =
+        typeof pendingWrite?.preview === 'string'
+          ? pendingWrite.preview
+          : '';
+      const bestPreview = interruptFull || interruptPreview;
+      const hasPreview = Boolean(
+        previewStreamBufferRef.current.trim() || bestPreview.trim(),
+      );
+
+      if (bestPreview) {
+        const current = previewStreamBufferRef.current;
+        if (!current.trim() || bestPreview.length >= current.length) {
+          previewStreamBufferRef.current = bestPreview;
+          setStreamedDocumentText(bestPreview);
+        }
+      }
+
       setPendingConfirmation({
         text: interrupt.prompt ?? 'Approve this action?',
         run_id: interrupt.runId ?? '',
         summary: interrupt.summary,
         tasks: interrupt.tasks,
+        hasPreview,
       });
       const messageId = assistantMessageIdRef.current;
       if (messageId) {
@@ -145,7 +202,9 @@ export function useAgentStream(
       setChatMessages((prev) => [...prev, userMessage, assistantMessage]);
       setPromptInput('');
       setPendingConfirmation(null);
+      resetStreamBuffers();
       setStreamedDocumentText('');
+      setStreamedArtifactType('draft');
       setCurrentAgentStatus('Starting agent run...');
       setIsAgentThinking(true);
 
@@ -176,6 +235,7 @@ export function useAgentStream(
       book,
       handleStreamEvent,
       promptInput,
+      resetStreamBuffers,
       setChatMessages,
       updateAssistantMessage,
     ],
@@ -187,6 +247,7 @@ export function useAgentStream(
       if (!book || !threadId) return;
 
       setPendingConfirmation(null);
+      resetStreamBuffers();
       setIsAgentThinking(true);
       setCurrentAgentStatus('Resuming agent run...');
       try {
@@ -202,7 +263,7 @@ export function useAgentStream(
         setCurrentAgentStatus('');
       }
     },
-    [book, handleStreamEvent],
+    [book, handleStreamEvent, resetStreamBuffers],
   );
 
   return {
@@ -211,6 +272,7 @@ export function useAgentStream(
     isAgentThinking,
     currentAgentStatus,
     streamedDocumentText,
+    streamedArtifactType,
     pendingConfirmation,
     sendPrompt,
     resume,
