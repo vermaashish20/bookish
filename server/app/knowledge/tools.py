@@ -87,6 +87,8 @@ def _search(
     return format_knowledge_result(result)
 
 
+# ── Mongo: persistent exact reads ─────────────────────────────────────────────
+
 def list_chapters(project_id: str, args: Dict[str, Any]) -> str:
     db = get_db()
     limit = _coerce_limit(args, 10)
@@ -380,25 +382,7 @@ def read_artifact(project_id: str, args: Dict[str, Any]) -> str:
     )
 
 
-def search_project(
-    project_id: str,
-    args: Dict[str, Any],
-    *,
-    run_id: Optional[str],
-    agent: Optional[str],
-    task: Optional[str],
-) -> str:
-    """Chroma semantic search over project knowledge."""
-    return _search(
-        project_id=project_id,
-        args=args,
-        default_scopes=["assets", "narrative", "characters", "world", "continuity", "style"],
-        run_id=run_id,
-        agent=agent,
-        task=task,
-        intent=args.get("intent") or "search_project",
-    )
-
+# ── Mongo: unified read router ────────────────────────────────────────────────
 
 def read_project(
     project_id: str,
@@ -459,108 +443,16 @@ def read_project(
             project,
             ["title", "subtitle", "genre", "tonality", "createdAt"],
         )
+    if resource in {"formal_memory", "bible", "memory"}:
+        return read_formal_memory(project_id, args)
 
     return (
         "[read_project] Error: unknown resource. Use one of: "
-        "sources, chapters, characters, world, artifacts, project."
+        "sources, chapters, characters, world, artifacts, project, formal_memory."
     )
 
 
-def retrieve_knowledge(
-    project_id: str,
-    args: Dict[str, Any],
-    *,
-    run_id: Optional[str],
-    agent: Optional[str],
-    task: Optional[str],
-) -> str:
-    """Unified KB router for agents: persistent Mongo reads or RAG search."""
-    mode = str(args.get("mode") or "").strip().lower()
-    surface = str(args.get("surface") or args.get("scope") or "").strip().lower()
-    operation = str(args.get("operation") or args.get("op") or "").strip().lower()
-
-    if mode in {"rag", "semantic", "chroma", "search"}:
-        scopes = args.get("scopes") or ([surface] if surface else None)
-        return _search(
-            project_id=project_id,
-            args={**args, "scopes": scopes},
-            default_scopes=["assets", "narrative", "characters", "world", "continuity", "style"],
-            run_id=run_id,
-            agent=agent,
-            task=task,
-            intent=args.get("intent") or "retrieve_knowledge_rag",
-        )
-
-    if mode not in {"persistent", "mongo", "exact", "source"}:
-        return (
-            "[retrieve_knowledge] Error: provide mode='persistent' for exact Mongo reads "
-            "or mode='rag' for Chroma semantic search."
-        )
-
-    if surface in {"source_assets", "sources", "assets", "user_assets"}:
-        if operation == "list":
-            return list_user_assets(project_id, args)
-        return read_project_sources(project_id, args)
-    if surface in {"chapter", "chapters", "narrative"}:
-        if operation == "list" or not (args.get("chapter_id") or args.get("chapterId") or args.get("chapter_number") or args.get("number")):
-            return list_chapters(project_id, args)
-        return read_chapter(project_id, args)
-    if surface in {"character", "characters"}:
-        if operation == "list" or not (args.get("character_id") or args.get("characterId") or args.get("id") or args.get("name")):
-            return list_characters(project_id, args)
-        return read_character(project_id, args)
-    if surface in {"world", "entity", "entities", "world_entities"}:
-        if operation == "list" or not (args.get("entity_id") or args.get("entityId") or args.get("id") or args.get("name")):
-            return list_world_entities(project_id, args)
-        return read_world_entity(project_id, args)
-    if surface in {"formal_memory", "memory", "bible"}:
-        return read_formal_memory(project_id, args)
-    if surface in {"artifact", "artifacts"}:
-        if operation == "list" or not (args.get("artifact_id") or args.get("artifactId") or args.get("id")):
-            return list_artifacts(project_id, args)
-        return read_artifact(project_id, args)
-
-    return (
-        "[retrieve_knowledge] Error: unknown persistent surface. Use one of: "
-        "source_assets, chapters, characters, world, formal_memory, artifacts."
-    )
-
-
-def describe_knowledge_tools() -> str:
-    return """
---- KNOWLEDGE TOOL CATALOG ---
-Use the Knowledge Base layer, not raw databases.
-
-1) Persistent Mongo exact reads
-Use when you need source-of-truth records, whole documents, lists, ids, full chapter text, uploaded assets, formal bibles, or saved artifacts.
-Preferred tool:
-{"tool_call":"retrieve_knowledge","arguments":{"mode":"persistent","surface":"source_assets|chapters|characters|world|formal_memory|artifacts","operation":"list|read","maxResults":5,"max_chars":20000}}
-
-Specialized persistent tools:
-list_user_assets, read_project_sources, read_user_asset,
-list_chapters, read_chapter,
-list_characters, read_character,
-list_world_entities, read_world_entity,
-read_formal_memory,
-list_artifacts, read_artifact
-
-2) RAG / Chroma semantic search
-Use when you need small relevant child chunks, semantic lookup, or a targeted passage.
-RAG searches one Chroma collection (`project_knowledge`) and filters by `projectId` plus scope-derived `sourceKind`.
-Results include child chunk text plus parent/root metadata. Use persistent tools to read the full parent chapter/source/artifact.
-Preferred tool:
-{"tool_call":"retrieve_knowledge","arguments":{"mode":"rag","query":"specific thing to find","scopes":["assets","narrative","characters","world","plot","continuity","style","artifacts"],"maxResults":5}}
-
-Specialized RAG tools:
-search_knowledge, search_assets, search_narrative, search_characters, search_world,
-search_plot, search_continuity, search_style, search_artifacts
-
-Rule: RAG is not the source of truth for whole records. If the user asks what exists in uploaded docs, chapters, or formal memory, use persistent mode first.
---- END KNOWLEDGE TOOL CATALOG ---
-""".strip()
-
-
-def execute_knowledge_tool(
+def execute_mongo_tool(
     project_id: str,
     tool_name: str,
     args: Dict[str, Any],
@@ -569,49 +461,44 @@ def execute_knowledge_tool(
     agent: Optional[str] = None,
     task: Optional[str] = None,
 ) -> str:
-    """Execute an agent-facing KB tool and return formatted LLM context."""
-    args = args or {}
-    normalized = tool_name.strip()
+    """Run read_project — the only Mongo-facing agent tool."""
+    if tool_name.strip() != "read_project":
+        return f"[Mongo] Unknown tool: {tool_name}. Use read_project."
+    return read_project(project_id, args or {}, run_id=run_id, agent=agent, task=task)
 
-    if normalized == "search_project":
-        return search_project(project_id, args, run_id=run_id, agent=agent, task=task)
-    if normalized == "read_project":
-        return read_project(project_id, args, run_id=run_id, agent=agent, task=task)
 
-    # Legacy router kept for internal/backward compatibility.
-    if normalized == "retrieve_knowledge":
-        return retrieve_knowledge(
-            project_id,
-            args,
-            run_id=run_id,
-            agent=agent,
-            task=task,
-        )
+# ── RAG: Chroma semantic search ───────────────────────────────────────────────
 
-    if normalized == "search_knowledge":
-        return search_project(project_id, args, run_id=run_id, agent=agent, task=task)
+def search_project(
+    project_id: str,
+    args: Dict[str, Any],
+    *,
+    run_id: Optional[str],
+    agent: Optional[str],
+    task: Optional[str],
+) -> str:
+    """Chroma semantic search over project knowledge."""
+    return _search(
+        project_id=project_id,
+        args=args,
+        default_scopes=["assets", "narrative", "characters", "world", "continuity", "style"],
+        run_id=run_id,
+        agent=agent,
+        task=task,
+        intent=args.get("intent") or "search_project",
+    )
 
-    if normalized == "read_project_sources":
-        return read_project_sources(project_id, args)
-    if normalized == "list_chapters":
-        return list_chapters(project_id, args)
-    if normalized == "read_chapter":
-        return read_chapter(project_id, args)
-    if normalized == "list_characters":
-        return list_characters(project_id, args)
-    if normalized == "read_character":
-        return read_character(project_id, args)
-    if normalized in {"list_world_entities", "list_entities"}:
-        return list_world_entities(project_id, args)
-    if normalized == "read_world_entity":
-        return read_world_entity(project_id, args)
-    if normalized == "list_user_assets":
-        return list_user_assets(project_id, args)
-    if normalized == "read_user_asset":
-        return read_user_asset(project_id, args)
-    if normalized == "list_artifacts":
-        return list_artifacts(project_id, args)
-    if normalized == "read_artifact":
-        return read_artifact(project_id, args)
 
-    return f"[Knowledge Tool: {tool_name}] Unknown tool."
+def execute_rag_tool(
+    project_id: str,
+    tool_name: str,
+    args: Dict[str, Any],
+    *,
+    run_id: Optional[str] = None,
+    agent: Optional[str] = None,
+    task: Optional[str] = None,
+) -> str:
+    """Run search_project — the only RAG-facing agent tool."""
+    if tool_name.strip() != "search_project":
+        return f"[RAG] Unknown tool: {tool_name}. Use search_project."
+    return search_project(project_id, args or {}, run_id=run_id, agent=agent, task=task)

@@ -8,7 +8,6 @@ from typing import Any
 from langgraph.runtime import Runtime
 
 from app.agent.utils.context_schema import BookishContext, context_header
-from app.agent.utils.state import BookishAgentState
 
 
 NARRATIVE_KEY = "state"
@@ -97,36 +96,33 @@ def load_memory_brief(store: Any, project_id: str) -> str:
     return "\n".join(lines).strip()
 
 
-def load_store_memory_node(state: BookishAgentState, runtime: Runtime[BookishContext]) -> dict[str, Any]:
+def load_store_memory_node(state: Any, runtime: Runtime[BookishContext]) -> dict[str, Any]:
     brief = load_memory_brief(runtime.store, runtime.context.project_id)
     return {"memoryBrief": brief}
 
 
-def persist_memory_node(state: BookishAgentState, runtime: Runtime[BookishContext]) -> dict[str, Any]:
-    tasks = state.get("tasks") or []
-    idx = max(0, int(state.get("currentTaskIndex", 0)) - 1)
-    if idx >= len(tasks):
-        return {}
-
-    task = tasks[idx]
-    if task.get("status") != "completed":
-        return {}
-
-    agent = str(task.get("agent") or "agent")
-    summary = f"{agent} completed: {str(task.get('task') or '')[:240]}"
+def persist_episode(
+    store: Any,
+    project_id: str,
+    *,
+    agent: str,
+    task: str,
+    run_id: str = "",
+) -> None:
+    """Write a single episodic memory entry to the store. Called by specialist tools."""
+    summary = f"{agent} completed: {task[:240]}"
     _store_put_sync(
-        runtime.store,
-        episodic_namespace(runtime.context.project_id),
+        store,
+        episodic_namespace(project_id),
         str(uuid.uuid4()),
         {
             "summary": summary,
             "agent": agent,
-            "runId": state.get("agentRunId"),
-            "task": task.get("task"),
+            "runId": run_id,
+            "task": task,
             "timestamp": datetime.utcnow().isoformat(),
         },
     )
-    return {}
 
 
 def update_narrative_after_write(

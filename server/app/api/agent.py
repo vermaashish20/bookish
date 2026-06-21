@@ -15,6 +15,7 @@ from app.agent.utils.context_schema import build_bookish_context
 from app.agent.utils.event_stream import UI_STREAM_MODES, normalize_stream_part, run_interrupted
 from app.agent.utils.state import BookishAgentState
 from app.core.streaming import STREAM_HEADERS
+from app.core.telemetry import flush_langfuse, langfuse_attributes, with_langfuse_callbacks
 from app.repositories.agent_runs import create_agent_run
 from app.repositories.chat_messages import add_chat_message, create_chat_thread
 from app.repositories.projects import get_project
@@ -49,7 +50,7 @@ def create_thread(payload: ThreadCreatePayload) -> Dict[str, str]:
 async def stream_thread_run(thread_id: str, payload: RunStreamPayload):
     graph_input, project_id = _build_graph_input(thread_id, payload)
     config = {"configurable": {"thread_id": thread_id}}
-    context = build_bookish_context(project_id)
+    context = build_bookish_context(project_id, agent_run_id=_extract_run_id(graph_input))
 
     return StreamingResponse(
         _stream_graph_parts(graph_input, config, context),
@@ -97,10 +98,6 @@ def _build_graph_input(
         userPrompt=message,
         agentRunId=run_id,
         memoryBrief="",
-        planSummary="",
-        tasks=[],
-        currentTaskIndex=0,
-        pendingWrite=None,
         artifactIds=[],
         finalResponse="",
         finalMessageId=None,
@@ -119,23 +116,47 @@ async def _stream_graph_parts(
     """Stream LangGraph protocol channels to the UI (custom + tasks only)."""
     seq = 0
     interrupted = False
+    thread_id = str((config.get("configurable") or {}).get("thread_id") or "unknown")
+    project_id = getattr(context, "project_id", "")
+    run_id = getattr(context, "agent_run_id", "") or _extract_run_id(graph_input)
+    trace_config = with_langfuse_callbacks(config)
+
     try:
-        async for part in graph.astream(
-            graph_input,
-            config=config,
-            context=context,
-            stream_mode=list(UI_STREAM_MODES),
-            version="v2",
+        with langfuse_attributes(
+            session_id=thread_id,
+            trace_name="bookish-agent-run",
+            tags=["bookish", "langgraph"],
+            metadata={
+                "projectId": project_id,
+                "agentRunId": run_id,
+                "threadId": thread_id,
+            },
         ):
-            if run_interrupted(part):
-                interrupted = True
-            for payload in normalize_stream_part(seq, part):
-                yield _encode_sse(payload)
-                seq += 1
+            async for part in graph.astream(
+                graph_input,
+                config=trace_config,
+                context=context,
+                stream_mode=list(UI_STREAM_MODES),
+                version="v2",
+            ):
+                if run_interrupted(part):
+                    interrupted = True
+                for payload in normalize_stream_part(seq, part):
+                    yield _encode_sse(payload)
+                    seq += 1
         yield _encode_sse({"event": "done", "interrupted": interrupted})
     except Exception as exc:
         yield _encode_sse({"event": "error", "error": str(exc)})
+    finally:
+        flush_langfuse()
 
 
 def _encode_sse(payload: Dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
+
+
+def _extract_run_id(graph_input: Any) -> str:
+    """Pull agentRunId from a BookishAgentState dict; empty string for resume Commands."""
+    if isinstance(graph_input, dict):
+        return str(graph_input.get("agentRunId") or "")
+    return ""

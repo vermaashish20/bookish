@@ -1,78 +1,90 @@
-"""Compiled LangGraph-native Bookish agent."""
+"""Compiled LangGraph-native Bookish agent — 3 nodes."""
 from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import RunnableConfig
 
 from app.agent.nodes.planner import plan_node
-from app.agent.nodes.write_control import approve_write_node, commit_write_node
-from app.agent.nodes.world_builder import world_builder_node
-from app.agent.nodes.writer import writer_node
-from app.agent.utils.completion import complete_run
 from app.agent.utils.context_schema import BookishContext
-from app.agent.utils.memory import load_store_memory_node, persist_memory_node
+from app.agent.utils.memory import load_store_memory_node
 from app.agent.utils.persistence import build_checkpointer, build_store
-from app.agent.utils.routing import route_after_agent_node, route_after_write_approval, route_next_task
 from app.agent.utils.state import BookishAgentState
+from app.agent.utils.streaming import emit_custom
+from app.repositories.agent_runs import complete_agent_run, fail_agent_run
+from app.repositories.artifacts import get_agent_run_artifacts
+from app.repositories.chat_messages import add_chat_message
+from app.repositories.projects import get_unified_project_payload
 
 
-def execute_next_node(
+def complete_node(
     state: BookishAgentState,
     config: RunnableConfig,
     runtime: Runtime[BookishContext],
-) -> dict:
-    """Route the next task or complete the run when the queue is exhausted."""
-    tasks = state.get("tasks", [])
-    idx = state.get("currentTaskIndex", 0)
-    if idx >= len(tasks):
-        return complete_run(state, config, runtime)
-    return {}
+) -> dict[str, Any]:
+    """Save the final assistant message and close the run."""
+    if state.get("finalMessageId"):
+        return {}
+
+    now = datetime.utcnow().isoformat()
+    thread_id = (config.get("configurable") or {}).get("thread_id", "unknown")
+    project_id = runtime.context.project_id
+    run_id = state["agentRunId"]
+
+    final_response = state.get("finalResponse") or state.get("userPrompt") or "Done."
+
+    artifact_ids = [a["_id"] for a in get_agent_run_artifacts(run_id)]
+    final_message_id = add_chat_message(
+        project_id=project_id,
+        role="assistant",
+        content=final_response,
+        agent_run_id=run_id,
+        artifact_references=artifact_ids,
+        thread_id=thread_id,
+    )
+
+    status = state.get("status", "completed")
+    if status == "rejected":
+        complete_agent_run(run_id, final_message_id, status="failed")
+        emit_custom(
+            "run_rejected",
+            runId=run_id,
+            messageId=final_message_id,
+            projectState=get_unified_project_payload(project_id),
+        )
+        return {"finalMessageId": final_message_id, "completedAt": now, "status": "rejected"}
+
+    complete_agent_run(run_id, final_message_id, status="completed")
+    emit_custom(
+        "run_completed",
+        runId=run_id,
+        status="completed",
+        messageId=final_message_id,
+        reply=final_response,
+        projectState=get_unified_project_payload(project_id),
+    )
+    return {
+        "finalResponse": final_response,
+        "finalMessageId": final_message_id,
+        "status": "completed",
+        "completedAt": now,
+    }
 
 
 def build_graph(*, with_persistence: bool = False):
     workflow = StateGraph(BookishAgentState, context_schema=BookishContext)
 
-    workflow.add_node("load_store_memory", load_store_memory_node)
+    workflow.add_node("load_memory", load_store_memory_node)
     workflow.add_node("plan", plan_node)
-    workflow.add_node("execute_next", execute_next_node)
-    workflow.add_node("writer", writer_node)
-    workflow.add_node("world_builder", world_builder_node)
-    workflow.add_node("persist_memory", persist_memory_node)
-    workflow.add_node("approve_write", approve_write_node)
-    workflow.add_node("commit_write", commit_write_node)
+    workflow.add_node("complete", complete_node)
 
-    workflow.set_entry_point("load_store_memory")
-    workflow.add_edge("load_store_memory", "plan")
-    workflow.add_edge("plan", "execute_next")
-    workflow.add_conditional_edges(
-        "execute_next",
-        route_next_task,
-        {
-            "writer": "writer",
-            "world_builder": "world_builder",
-            "end": END,
-        },
-    )
-    workflow.add_edge("writer", "persist_memory")
-    workflow.add_edge("world_builder", "persist_memory")
-    workflow.add_conditional_edges(
-        "persist_memory",
-        route_after_agent_node,
-        {
-            "approve_write": "approve_write",
-            "execute_next": "execute_next",
-        },
-    )
-    workflow.add_conditional_edges(
-        "approve_write",
-        route_after_write_approval,
-        {
-            "commit_write": "commit_write",
-            "execute_next": "execute_next",
-        },
-    )
-    workflow.add_edge("commit_write", "execute_next")
+    workflow.set_entry_point("load_memory")
+    workflow.add_edge("load_memory", "plan")
+    workflow.add_edge("plan", "complete")
+    workflow.add_edge("complete", END)
 
     if with_persistence:
         return workflow.compile(

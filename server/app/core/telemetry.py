@@ -18,10 +18,12 @@ try:
     from langfuse import observe as _observe
     from langfuse import get_client as _get_client
     from langfuse import propagate_attributes as _propagate_attributes
+    from langfuse.langchain import CallbackHandler as _CallbackHandler
 except ImportError:  # pragma: no cover
     _observe = None
     _get_client = None
     _propagate_attributes = None
+    _CallbackHandler = None
 
 
 class _NoopContext:
@@ -71,6 +73,63 @@ def get_langfuse_client() -> Any:
         return _get_client()
     except Exception:
         return None
+
+
+def get_langfuse_callback_handler() -> Any | None:
+    """LangChain/LangGraph callback handler; no-op when Langfuse is unavailable."""
+    if _CallbackHandler is None or get_langfuse_client() is None:
+        return None
+    try:
+        return _CallbackHandler()
+    except Exception:
+        return None
+
+
+def _is_langfuse_callback_handler(handler: Any) -> bool:
+    return _CallbackHandler is not None and isinstance(handler, _CallbackHandler)
+
+
+def _langfuse_handler_registered(callbacks: Any, handler: Any) -> bool:
+    if callbacks is None:
+        return False
+    if isinstance(callbacks, list):
+        return any(_is_langfuse_callback_handler(h) or h is handler for h in callbacks)
+    managers = callbacks if isinstance(callbacks, list) else [callbacks]
+    for manager in managers:
+        nested = getattr(manager, "handlers", None)
+        if isinstance(nested, list) and any(
+            _is_langfuse_callback_handler(h) or h is handler for h in nested
+        ):
+            return True
+    return _is_langfuse_callback_handler(callbacks)
+
+
+def with_langfuse_callbacks(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge Langfuse CallbackHandler into a LangChain RunnableConfig dict."""
+    merged = dict(config or {})
+    handler = get_langfuse_callback_handler()
+    if handler is None:
+        return merged
+
+    callbacks = merged.get("callbacks")
+    if _langfuse_handler_registered(callbacks, handler):
+        return merged
+
+    if callbacks is None:
+        merged["callbacks"] = [handler]
+    elif isinstance(callbacks, list):
+        merged["callbacks"] = [*callbacks, handler]
+    elif hasattr(callbacks, "add_handler"):
+        # LangGraph passes AsyncCallbackManager — must attach, not wrap in a list.
+        callbacks.add_handler(handler)
+        merged["callbacks"] = callbacks
+    else:
+        merged["callbacks"] = [handler]
+    return merged
+
+
+def is_langfuse_enabled() -> bool:
+    return get_langfuse_client() is not None
 
 
 @contextmanager

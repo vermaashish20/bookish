@@ -11,15 +11,17 @@ class BookishContext:
     """Static per-invocation project metadata (not checkpointed in graph state)."""
 
     project_id: str
+    agent_run_id: str
     title: str
     genre: str
     tonality: str
 
 
-def build_bookish_context(project_id: str) -> BookishContext:
+def build_bookish_context(project_id: str, agent_run_id: str = "") -> BookishContext:
     project = get_project(project_id) or {}
     return BookishContext(
         project_id=project_id,
+        agent_run_id=agent_run_id,
         title=str(project.get("title") or "Untitled"),
         genre=str(project.get("genre") or ""),
         tonality=str(project.get("tonality") or ""),
