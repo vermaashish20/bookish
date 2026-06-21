@@ -18,7 +18,7 @@ def create_agent_run(
     project_id: str,
     user_message_id: str,
     user_prompt: str,
-    session_id: Optional[str] = None,
+    thread_id: str,
 ) -> str:
     """Create a new agent run record"""
     db = get_db()
@@ -27,7 +27,7 @@ def create_agent_run(
     db.agent_runs.insert_one({
         "_id": run_id,
         "projectId": project_id,
-        "sessionId": session_id or "default",
+        "threadId": thread_id,
         "userMessageId": user_message_id,
         "userPrompt": user_prompt,
         "plannerDecision": None,

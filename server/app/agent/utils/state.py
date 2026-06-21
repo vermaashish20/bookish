@@ -5,9 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 
 TaskAgent = Literal[
-    "researcher",
     "writer",
-    "editor",
     "world_builder",
 ]
 TaskStatusName = Literal["pending", "running", "completed", "failed", "rejected"]
@@ -22,19 +20,6 @@ PendingWriteKind = Literal[
 ]
 
 
-class ProjectContext(TypedDict, total=False):
-    projectId: str
-    title: str
-    genre: str
-    tonality: str
-    assetCount: int
-    assetSummaries: List[Dict[str, Any]]
-    characterCount: int
-    chapterCount: int
-    bookSummary: str
-    chapterSummaries: List[Dict[str, Any]]
-
-
 class AgentTask(TypedDict, total=False):
     agent: TaskAgent
     task: str
@@ -44,11 +29,6 @@ class AgentTask(TypedDict, total=False):
     outputArtifactId: Optional[str]
     error: Optional[str]
     chapterId: Optional[str]
-
-
-class PlanApproval(TypedDict, total=False):
-    approved: bool
-    response: Any
 
 
 class PendingWrite(TypedDict, total=False):
@@ -67,30 +47,20 @@ class PendingWrite(TypedDict, total=False):
 
 
 class BookishAgentState(TypedDict, total=False):
-    projectId: str
-    chatSessionId: str
     userMessageId: str
     userPrompt: str
     agentRunId: str
-    threadId: str
 
-    projectContext: ProjectContext
+    memoryBrief: str
     planSummary: str
     tasks: List[AgentTask]
     currentTaskIndex: int
-    approval: Optional[PlanApproval]
     pendingWrite: Optional[PendingWrite]
 
-    researchNotes: Optional[str]
-    draftContent: Optional[str]
-    editedContent: Optional[str]
-    worldBuildingNotes: Optional[str]
     artifactIds: List[str]
-
     finalResponse: str
     finalMessageId: Optional[str]
     status: RunStatusName
     error: Optional[str]
     startedAt: str
     completedAt: Optional[str]
-

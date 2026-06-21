@@ -29,23 +29,28 @@ export type LangGraphCustomPayload = {
   tasks?: LangGraphTask[];
   reply?: string;
   projectState?: BookProject;
+  agent?: string;
+  artifactType?: string;
+  contentPreview?: string;
+  pendingWrite?: unknown;
   [key: string]: unknown;
 };
 
-export type LangGraphStreamPart = {
-  type?: 'updates' | 'custom' | 'tasks' | 'checkpoints' | string;
+/** LangGraph protocol channel event (custom, tasks, …). */
+export type LangGraphProtocolEvent = {
+  event: 'protocol';
+  seq: number;
+  method: string;
+  namespace?: string[];
   data?: unknown;
-  [key: string]: unknown;
 };
 
 export type LangGraphStreamEvent =
-  | { event: 'langgraph'; part: LangGraphStreamPart }
-  | { event: 'done' }
+  | LangGraphProtocolEvent
+  | { event: 'done'; interrupted?: boolean }
   | { event: 'error'; error?: string };
 
 export type AgentThread = {
   threadId: string;
   projectId: string;
-  chatSessionId: string;
 };
-

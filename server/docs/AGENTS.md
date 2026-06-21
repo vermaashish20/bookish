@@ -3,68 +3,53 @@
 ## Graph
 
 ```text
-START → planner → should_continue_tasks ─┬→ researcher ─┐
-                                         ├→ world_builder ┤
-                                         ├→ writer ────────┤→ … → finalize → END
-                                         └→ editor ────────┘
+START → load_store_memory → planner → execute_next ─┬→ writer ──────────┐
+                                                     └→ world_builder ──┤
+                                                                        ↓
+                                                              persist_memory
+                                                                        ↓
+                                                              approve_write? → commit_write
+                                                                        ↓
+                                                              execute_next → END
 ```
 
 | Component | Path |
 |-----------|------|
 | Graph / router | `app/agent/agent.py` |
 | State | `app/agent/utils/state.py` |
-| Nodes | `app/agent/utils/nodes/` |
+| Nodes | `app/agent/nodes/` |
 | Tools | `app/agent/utils/tools.py` |
 
 ## Agents
 
-`planner`, `researcher`, `world_builder`, `writer`, `editor`.
+`planner`, `writer`, `world_builder`.
 
 **Prompts (source of truth):** `app/prompts/*.py`
 
 | Module | Role |
 |--------|------|
-| `planner.py` | Plan or direct reply |
-| `researcher.py` | RAG + research report |
-| `world_builder.py` | Character / entity JSON |
-| `writer.py` | Prose draft |
-| `editor.py` | Continuity, tone, polish + publish |
+| `planner.py` | Plan or direct reply; uses `search_project` / `read_project` tools |
+| `writer.py` | Draft, revise, and polish prose; proposes chapter HITL writes |
+| `world_builder.py` | Lore, characters, entities; tool-backed canon notes |
 
-Tools are exposed through `app/agent/utils/tools.py` and backed by the project knowledge service.
+Tools are exposed through `app/agent/utils/tools.py` and backed by the project knowledge service (`app/knowledge/`).
 
 ## Workflows
 
-**Chat:** message → planner → (HITL plan approval) → specialists → finalize.
+**Chat:** message → load_store_memory → planner → specialists → finalize.
 
-**Typical chapter chain:** researcher → writer → editor.
+**New chapter:** planner delegates a single **writer** task. Writer uses tools, drafts prose, proposes `chapter_create` via HITL.
 
-| Step | Agent | Persists |
-|------|-------|----------|
-| Research | researcher | `researchNotes` |
-| Draft | writer | chapter `draft`, `draftContent` |
-| Publish | editor | chapter `published`, `bookSummary` |
+**Revise chapter:** planner delegates **writer** with explicit chapter reference. Writer reads chapter via tools and proposes `chapter_update` via HITL.
 
-**World bible:** world_builder → artifact → review in workspace.
+**World bible:** planner delegates **world_builder**. Agent uses tools and saves a world-building artifact.
 
-**HITL:** plan approval uses LangGraph `interrupt()` and resumes through `/api/agent/threads/{thread_id}/runs/stream`.
+**HITL:** durable writes use LangGraph `interrupt()` and resume through `/api/agent/threads/{thread_id}/runs/stream`.
 
-## State handoff
+## Specialist design
 
-| Field | Set by | Read by |
-|-------|--------|---------|
-| `researchNotes` | researcher | writer, editor |
-| `draftContent` | writer | editor |
-| `editedContent` | editor | — |
-
-Planner tasks are routed by `app/agent/utils/routing.py` and hand off through graph state fields.
+Each specialist runs a bounded tool loop (`search_project`, `read_project`) — no artifact chaining between agents. Cross-run context comes from `memoryBrief` (Store) and static `BookishContext`.
 
 ## Vector search (Chroma)
 
-| Collection | Content |
-|------------|---------|
-| `chapters` | Chapters and draft artifacts |
-| `characters` | Character bible |
-| `world_system` | Entities, research, assets |
-| `book_style_guide` | Style / prompt assets |
-
-Indexing: `app/services/indexing.py` · Retrieval: `app/services/retrieval.py`
+Semantic search uses the unified `project_knowledge` collection with scope-derived metadata filters. Indexing: `app/services/indexing.py` · Retrieval: `app/knowledge/service.py`

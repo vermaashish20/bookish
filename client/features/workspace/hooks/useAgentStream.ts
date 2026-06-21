@@ -2,61 +2,35 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { createAgentThread, streamAgentRun } from '@/lib/api';
+import {
+  isPreviewableArtifactContent,
+  sanitizeAssistantText,
+} from '@/lib/agent/display';
+import {
+  effectsFromCustomPayload,
+  handleAgentStreamEvent,
+} from '@/lib/agent/streamEvents';
 import type { BookProject, ChatMessage } from '@/lib/types';
-import type {
-  LangGraphCustomPayload,
-  LangGraphInterrupt,
-  LangGraphStreamEvent,
-  LangGraphStreamPart,
-  LangGraphTask,
-} from '@/lib/types/langgraph';
+import type { LangGraphCustomPayload, LangGraphInterrupt } from '@/lib/types/langgraph';
 
-type PendingConfirmation = { text: string; run_id: string; summary?: string; tasks?: LangGraphTask[] };
-
-function findInterrupt(value: unknown): LangGraphInterrupt | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-
-  if (record.kind === 'plan_approval' || record.kind === 'write_approval') {
-    return record as LangGraphInterrupt;
-  }
-
-  if ('value' in record) {
-    const nested = findInterrupt(record.value);
-    if (nested) return nested;
-  }
-
-  for (const candidate of Object.values(record)) {
-    if (Array.isArray(candidate)) {
-      for (const item of candidate) {
-        const nested = findInterrupt(item);
-        if (nested) return nested;
-      }
-    } else {
-      const nested = findInterrupt(candidate);
-      if (nested) return nested;
-    }
-  }
-
-  return null;
-}
-
-function customPayload(part: LangGraphStreamPart): LangGraphCustomPayload | null {
-  if (part.type !== 'custom' || !part.data || typeof part.data !== 'object') return null;
-  return part.data as LangGraphCustomPayload;
-}
+type PendingConfirmation = {
+  text: string;
+  run_id: string;
+  summary?: string;
+  tasks?: LangGraphCustomPayload['tasks'];
+};
 
 export function useAgentStream(
   book: BookProject | null,
   _chatMessages: ChatMessage[],
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setBook: React.Dispatch<React.SetStateAction<BookProject | null>>,
-  activeChatSessionId: string,
+  activeChatSessionId: string | null,
 ) {
   const [promptInput, setPromptInput] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [currentAgentStatus, setCurrentAgentStatus] = useState('');
-  const [streamedDocumentText] = useState('');
+  const [streamedDocumentText, setStreamedDocumentText] = useState('');
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
   const threadIdRef = useRef<string | null>(null);
@@ -64,82 +38,90 @@ export function useAgentStream(
 
   const updateAssistantMessage = useCallback(
     (messageId: string, text: string) => {
+      const cleaned = sanitizeAssistantText(text);
+      if (!cleaned) return;
       setChatMessages((prev) =>
         prev.map((message) =>
-          message.id === messageId ? { ...message, text } : message,
+          message.id === messageId ? { ...message, text: cleaned } : message,
         ),
       );
     },
     [setChatMessages],
   );
 
-  const handleStreamEvent = useCallback(
-    (event: LangGraphStreamEvent) => {
-      if (event.event === 'error') {
-        const messageId = assistantMessageIdRef.current;
-        if (messageId) {
-          updateAssistantMessage(messageId, `Orchestration error: ${event.error ?? 'Unknown error'}`);
-        }
-        return;
+  const applyCustomPayload = useCallback(
+    (payload: LangGraphCustomPayload) => {
+      const effects = effectsFromCustomPayload(payload);
+      const messageId = assistantMessageIdRef.current;
+
+      if (effects.chatText && messageId) {
+        updateAssistantMessage(messageId, effects.chatText);
       }
-
-      if (event.event !== 'langgraph') return;
-
-      const interrupt = findInterrupt(event.part);
-      if (interrupt) {
-        if (interrupt.threadId) threadIdRef.current = interrupt.threadId;
-        setPendingConfirmation({
-          text: interrupt.prompt ?? 'Approve this action?',
-          run_id: interrupt.runId ?? '',
-          summary: interrupt.summary,
-          tasks: interrupt.tasks,
-        });
-        const messageId = assistantMessageIdRef.current;
-        if (messageId) {
-          updateAssistantMessage(messageId, interrupt.summary ?? 'Approval needed.');
-        }
-        setCurrentAgentStatus('Waiting for approval.');
-        return;
+      if (effects.statusText) {
+        setCurrentAgentStatus(effects.statusText);
       }
-
-      const payload = customPayload(event.part);
-      if (!payload) return;
-
-      if (payload.kind === 'plan_created') {
-        const messageId = assistantMessageIdRef.current;
-        if (messageId) {
-          updateAssistantMessage(messageId, payload.summary ?? 'Plan created.');
+      if (effects.previewText) {
+        const artifactType =
+          payload.kind === 'artifact_created'
+            ? String(payload.artifactType ?? '')
+            : 'draft';
+        if (isPreviewableArtifactContent(effects.previewText, artifactType)) {
+          setStreamedDocumentText(effects.previewText);
         }
-        setCurrentAgentStatus('Plan created.');
       }
-
-      if (payload.kind === 'task_started') {
-        setCurrentAgentStatus(`Running ${String(payload.agent ?? 'agent')}...`);
+      if (effects.clearPreview) {
+        setStreamedDocumentText('');
       }
-
-      if (payload.kind === 'task_completed') {
-        setCurrentAgentStatus(`${String(payload.agent ?? 'Agent')} completed.`);
-      }
-
-      if (payload.kind === 'run_completed' || payload.kind === 'run_rejected') {
-        if (payload.projectState) {
-          setBook((current) =>
-            current ? { ...current, ...(payload.projectState as BookProject) } : current,
-          );
-        }
-        const messageId = assistantMessageIdRef.current;
-        if (messageId && typeof payload.reply === 'string') {
-          updateAssistantMessage(messageId, payload.reply);
-        }
+      if (effects.projectState) {
+        setBook((current) =>
+          current ? { ...current, ...effects.projectState } : current,
+        );
       }
     },
     [setBook, updateAssistantMessage],
   );
 
+  const applyInterrupt = useCallback(
+    (interrupt: LangGraphInterrupt) => {
+      if (interrupt.threadId) threadIdRef.current = interrupt.threadId;
+      setPendingConfirmation({
+        text: interrupt.prompt ?? 'Approve this action?',
+        run_id: interrupt.runId ?? '',
+        summary: interrupt.summary,
+        tasks: interrupt.tasks,
+      });
+      const messageId = assistantMessageIdRef.current;
+      if (messageId) {
+        updateAssistantMessage(messageId, interrupt.summary ?? 'Approval needed.');
+      }
+      setCurrentAgentStatus('Waiting for approval.');
+    },
+    [updateAssistantMessage],
+  );
+
+  const handleStreamEvent = useCallback(
+    (event: Parameters<typeof handleAgentStreamEvent>[0]) => {
+      handleAgentStreamEvent(event, {
+        onCustom: applyCustomPayload,
+        onInterrupt: applyInterrupt,
+        onDone: () => {
+          /* run finished; isAgentThinking cleared in sendPrompt/resume finally */
+        },
+        onError: (message) => {
+          const messageId = assistantMessageIdRef.current;
+          if (messageId) {
+            updateAssistantMessage(messageId, `Orchestration error: ${message}`);
+          }
+        },
+      });
+    },
+    [applyCustomPayload, applyInterrupt, updateAssistantMessage],
+  );
+
   const sendPrompt = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (!book || !promptInput.trim()) return;
+      if (!book || !promptInput.trim() || !activeChatSessionId) return;
 
       const captured = promptInput.trim();
       const userMessage: ChatMessage = {
@@ -163,15 +145,20 @@ export function useAgentStream(
       setChatMessages((prev) => [...prev, userMessage, assistantMessage]);
       setPromptInput('');
       setPendingConfirmation(null);
-      setCurrentAgentStatus('Starting LangGraph run...');
+      setStreamedDocumentText('');
+      setCurrentAgentStatus('Starting agent run...');
       setIsAgentThinking(true);
 
       try {
-        const thread = await createAgentThread(book.id, activeChatSessionId);
-        threadIdRef.current = thread.threadId;
+        let threadId = activeChatSessionId;
+        if (!threadId) {
+          const thread = await createAgentThread(book.id);
+          threadId = thread.threadId;
+        }
+        threadIdRef.current = threadId;
         await streamAgentRun(
-          thread.threadId,
-          { projectId: book.id, message: captured, chatSessionId: activeChatSessionId },
+          threadId,
+          { projectId: book.id, message: captured },
           handleStreamEvent,
         );
       } catch {
@@ -201,11 +188,11 @@ export function useAgentStream(
 
       setPendingConfirmation(null);
       setIsAgentThinking(true);
-      setCurrentAgentStatus('Resuming LangGraph run...');
+      setCurrentAgentStatus('Resuming agent run...');
       try {
         await streamAgentRun(
           threadId,
-          { command: { resume: decision === 'yes' ? 'approve' : 'reject' } },
+          { command: { resume: decision === 'yes' ? 'approve' : 'reject' }, projectId: book.id },
           handleStreamEvent,
         );
       } catch (err) {
@@ -229,4 +216,3 @@ export function useAgentStream(
     resume,
   };
 }
-

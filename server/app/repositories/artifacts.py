@@ -13,7 +13,7 @@ from app.core.streaming import publish_sync_event
 def create_artifact(
     project_id: str,
     agent_run_id: str,
-    agent_name: str,  # "researcher" | "world_builder" | "writer" | "editor"
+    agent_name: str,  # "world_builder" | "writer" (legacy artifacts may use removed agent names)
     artifact_type: str,  # "research_notes" | "world_building" | "draft" | "edited_content"
     content: str,
     metadata: Optional[Dict[str, Any]] = None,

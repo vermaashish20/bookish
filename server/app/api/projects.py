@@ -4,16 +4,24 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.repositories.assets import add_user_asset
 from app.repositories.projects import (
+    DEFAULT_PROJECT_SETTINGS,
     create_project,
     delete_project,
     get_all_projects,
     get_project,
+    get_project_settings,
     get_project_summary,
     get_unified_project_payload,
+    update_project_settings,
 )
 from app.repositories.artifacts import get_artifact
-from app.schemas import AssetUploadPayload, CreateProjectPayload
-from app.services.assets import parse_asset_file
+from app.schemas import AssetUploadPayload, CreateProjectPayload, UpdateSettingsPayload
+from app.repositories.chat_messages import (
+    clear_chat_thread,
+    create_chat_thread,
+    get_project_chat_messages,
+    list_chat_threads,
+)
 
 router = APIRouter(
     prefix="/api/projects",
@@ -45,13 +53,7 @@ def register_project(payload: CreateProjectPayload):
     work starts from the workspace through the LangGraph `/api/agent` routes.
     """
     created_at = datetime.utcnow().isoformat()
-    settings_dict = {
-        "plannerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "writerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "researcherModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "editorModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-        "worldBuilderModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
-    }
+    settings_dict = DEFAULT_PROJECT_SETTINGS.copy()
 
     genre_lower = (payload.genre or "").lower()
     if "fiction" in genre_lower:
@@ -96,6 +98,27 @@ def fetch_project_artifact(id: str, artifact_id: str):
     if not artifact or artifact.get("projectId") != id:
         raise HTTPException(status_code=404, detail="Artifact not found.")
     return artifact
+
+
+@router.get("/{id}/settings")
+def fetch_settings(id: str):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return get_project_settings(id)
+
+
+@router.post("/{id}/settings")
+def save_settings(id: str, payload: UpdateSettingsPayload):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    settings = payload.settings.model_dump()
+    update_project_settings(id, settings)
+    return {
+        "message": "Model routing configs committed successfully.",
+        "settings": settings,
+    }
 
 
 @router.delete("/{id}")
@@ -164,3 +187,41 @@ async def register_asset(id: str, request: Request):
         content=parsed_content,
     )
     return get_unified_project_payload(id)
+
+
+@router.get("/{id}/chat-threads")
+def fetch_chat_threads(id: str):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return list_chat_threads(id)
+
+
+@router.post("/{id}/chat-threads")
+def register_chat_thread(id: str):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return create_chat_thread(id)
+
+
+@router.get("/{id}/messages")
+def fetch_project_messages(id: str, thread_id: str | None = None):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    if not thread_id:
+        threads = list_chat_threads(id)
+        thread_id = threads[0]["threadId"] if threads else None
+    if not thread_id:
+        return []
+    return get_project_chat_messages(id, thread_id)
+
+
+@router.delete("/{id}/chat-threads/{thread_id}/messages")
+def clear_chat_thread_messages(id: str, thread_id: str):
+    project = get_project(id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    deleted = clear_chat_thread(id, thread_id)
+    return {"status": "ok", "threadId": thread_id, "deleted": deleted}

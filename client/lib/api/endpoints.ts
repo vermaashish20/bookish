@@ -16,10 +16,10 @@ export const endpoints = {
     assets: (id: string) => `/api/projects/${id}/assets`,
     artifact: (id: string, artifactId: string) =>
       `/api/projects/${id}/artifacts/${encodeURIComponent(artifactId)}`,
-    messages: (id: string, sessionId?: string) =>
-      `/api/projects/${id}/messages${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`,
-    chatSessions: (id: string) => `/api/projects/${id}/chat-sessions`,
-    clearChatSession: (id: string, sessionId: string) =>
-      `/api/projects/${id}/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
+    messages: (id: string, threadId?: string) =>
+      `/api/projects/${id}/messages${threadId ? `?thread_id=${encodeURIComponent(threadId)}` : ''}`,
+    chatThreads: (id: string) => `/api/projects/${id}/chat-threads`,
+    clearChatThread: (id: string, threadId: string) =>
+      `/api/projects/${id}/chat-threads/${encodeURIComponent(threadId)}/messages`,
   },
 } as const;

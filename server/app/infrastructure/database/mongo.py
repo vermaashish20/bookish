@@ -41,7 +41,8 @@ def init_db():
     db.agent_runs.create_index([("projectId", pymongo.ASCENDING), ("startedAt", pymongo.DESCENDING)])
     db.artifacts.create_index([("projectId", pymongo.ASCENDING), ("createdAt", pymongo.DESCENDING)])
     db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
-    db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("sessionId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
+    db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("threadId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
+    db.agent_runs.create_index([("projectId", pymongo.ASCENDING), ("threadId", pymongo.ASCENDING), ("startedAt", pymongo.DESCENDING)])
     db.user_assets.create_index([("projectId", pymongo.ASCENDING), ("addedAt", pymongo.ASCENDING)])
 
     # Optional full-text indexes (legacy; semantic search uses Chroma)

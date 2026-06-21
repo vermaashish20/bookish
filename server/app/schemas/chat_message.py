@@ -4,7 +4,7 @@ Pydantic models for the chat_messages collection.
 MongoDB collection: chat_messages
 ID pattern:         msg_{ObjectId}
 
-Messages are scoped by project and chat session.
+Messages are scoped by project and thread id (LangGraph checkpointer key).
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class ChatMessage(BaseModel):
     """
     id: str = Field(..., alias="_id", description="msg_{ObjectId}")
     projectId: str
-    sessionId: str = "default"
+    threadId: str
     role: Literal["user", "assistant", "system"]
     content: str
 

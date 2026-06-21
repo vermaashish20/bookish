@@ -22,9 +22,13 @@ class ProjectSettings(BaseModel):
     """Per-project model configuration for every agent role."""
     plannerModel:      ModelConfig = Field(default_factory=ModelConfig)
     writerModel:       ModelConfig = Field(default_factory=ModelConfig)
-    researcherModel:   ModelConfig = Field(default_factory=ModelConfig)
-    editorModel:       ModelConfig = Field(default_factory=ModelConfig)
     worldBuilderModel: ModelConfig = Field(default_factory=ModelConfig)
+
+    model_config = {"extra": "ignore"}
+
+
+class UpdateSettingsPayload(BaseModel):
+    settings: ProjectSettings
 
 
 class Project(BaseModel):

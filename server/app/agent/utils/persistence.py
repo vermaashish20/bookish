@@ -42,5 +42,22 @@ def build_checkpointer() -> Any:
 
 def build_store() -> Any:
     """Build the long-term runtime store for cross-thread agent memory."""
-    return InMemoryStore()
+    try:
+        from langgraph.store.mongodb import MongoDBStore
+        from pymongo import MongoClient
+
+        store = MongoDBStore(
+            client=MongoClient(MONGO_URI),
+            db_name=MONGO_DB_NAME,
+        )
+        setup = getattr(store, "setup", None)
+        if callable(setup):
+            setup()
+        return store
+    except Exception as exc:
+        logger.warning(
+            "Falling back to in-memory LangGraph store after MongoDB setup failed: %s",
+            exc,
+        )
+        return InMemoryStore()
 

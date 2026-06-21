@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { isPreviewableArtifactContent, isToolCallPayload } from '@/lib/agent/display';
 import { ChapterItem, DecisionItem } from '@/lib/types';
 
 interface PreviewCanvasProps {
@@ -17,6 +18,10 @@ interface PreviewCanvasProps {
 export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, bookTitle, streamedDocumentText, activePreviewArtifact }: PreviewCanvasProps) {
   // Helper to strip JSON markdown and parse it into readable text
   const formatContentForPreview = (text: string) => {
+    if (!text.trim() || isToolCallPayload(text)) {
+      return '';
+    }
+
     let cleanText = text;
     // Extract text inside ```json block if exists
     const jsonMatch = text.match(/```(?:json)?\n([\s\S]*?)```/);
@@ -26,6 +31,12 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
     
     try {
       const parsed = JSON.parse(cleanText);
+      if (typeof parsed === 'object' && parsed !== null) {
+        const record = parsed as Record<string, unknown>;
+        if (record.type === 'tool_call' || typeof record.tool_call === 'string') {
+          return '';
+        }
+      }
       // Format parsed JSON to readable text
       if (Array.isArray(parsed)) {
         return parsed.map((item) => {
@@ -51,9 +62,12 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
 
   const rawContent = activePreviewArtifact?.artifactContent || streamedDocumentText || chapter?.content || '';
   const contentToDisplay = formatContentForPreview(rawContent);
+  const artifactType = activePreviewArtifact?.artifactType ?? (streamedDocumentText ? 'draft' : undefined);
+  const hasRenderableContent = isPreviewableArtifactContent(contentToDisplay, artifactType) ||
+    Boolean(!activePreviewArtifact && !streamedDocumentText && chapter?.content?.trim());
 
   const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? 'Writer' : 'Writer');
-  const shouldPaginate = ['Writer', 'Editor'].includes(currentAgent) || (!activePreviewArtifact && chapter);
+  const shouldPaginate = currentAgent === 'Writer' || (!activePreviewArtifact && chapter);
 
   const previewChunks = shouldPaginate
     ? (contentToDisplay.match(/[\s\S]{1,2200}/g) || [])
@@ -145,7 +159,7 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
             )}
 
             <div className={shouldPaginate ? "space-y-4" : "flex-1 px-8 py-6"}>
-              {activePreviewContent ? (
+              {hasRenderableContent && activePreviewContent ? (
                 <div className="space-y-4 w-full max-w-full overflow-hidden">
                   {!activePreviewArtifact && chapter && (
                     <div className="mb-6 text-center">

@@ -30,8 +30,6 @@ const DEFAULT_CONFIG: ModelConfig = {
 const DEFAULT_SETTINGS: ProjectSettings = {
   plannerModel: { ...DEFAULT_CONFIG },
   writerModel: { ...DEFAULT_CONFIG },
-  researcherModel: { ...DEFAULT_CONFIG },
-  editorModel: { ...DEFAULT_CONFIG },
   worldBuilderModel: { ...DEFAULT_CONFIG },
 };
 
@@ -60,8 +58,6 @@ function normalizeSettings(settings?: Partial<ProjectSettings>): ProjectSettings
   return {
     plannerModel: normalizeModelConfig(settings?.plannerModel),
     writerModel: normalizeModelConfig(settings?.writerModel),
-    researcherModel: normalizeModelConfig(settings?.researcherModel),
-    editorModel: normalizeModelConfig(settings?.editorModel),
     worldBuilderModel: normalizeModelConfig(settings?.worldBuilderModel),
   };
 }
@@ -155,8 +151,6 @@ export function useModelSettings(
     return {
       plannerModel: withCredential(settings.plannerModel),
       writerModel: withCredential(settings.writerModel),
-      researcherModel: withCredential(settings.researcherModel),
-      editorModel: withCredential(settings.editorModel),
       worldBuilderModel: withCredential(settings.worldBuilderModel),
     };
   }, [credentials, settings]);
@@ -189,14 +183,6 @@ export function useModelSettings(
     setWriterProvider: (provider: LLMProvider) => updateModelConfig('writerModel', { provider }),
     writerModel: settings.writerModel.modelName,
     setWriterModel: (modelName: string) => updateModelConfig('writerModel', { modelName }),
-    researcherProvider: settings.researcherModel.provider,
-    setResearcherProvider: (provider: LLMProvider) => updateModelConfig('researcherModel', { provider }),
-    researcherModel: settings.researcherModel.modelName,
-    setResearcherModel: (modelName: string) => updateModelConfig('researcherModel', { modelName }),
-    editorProvider: settings.editorModel.provider,
-    setEditorProvider: (provider: LLMProvider) => updateModelConfig('editorModel', { provider }),
-    editorModel: settings.editorModel.modelName,
-    setEditorModel: (modelName: string) => updateModelConfig('editorModel', { modelName }),
     worldBuilderProvider: settings.worldBuilderModel.provider,
     setWorldBuilderProvider: (provider: LLMProvider) => updateModelConfig('worldBuilderModel', { provider }),
     worldBuilderModel: settings.worldBuilderModel.modelName,

@@ -9,18 +9,20 @@ import {
   DecisionItem,
   GeneratedArtifact,
 } from '@/lib/types';
-import type { LangGraphTask } from '@/lib/types/langgraph';
-import AgentAssistant from '@/components/workspace/AgentAssistant';
-import PreviewCanvas from '@/components/workspace/PreviewCanvas';
-import { fetchArtifact } from '@/lib/api';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
   Boolean((chapter.content ?? '').trim()) ||
   chapter.status === 'draft' ||
   chapter.status === 'completed' ||
   chapter.status === 'published';
-
-const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content']);
+import type { LangGraphTask } from '@/lib/types/langgraph';
+import AgentAssistant from '@/components/workspace/AgentAssistant';
+import PreviewCanvas from '@/components/workspace/PreviewCanvas';
+import { fetchArtifact } from '@/lib/api';
+import {
+  isPreviewableArtifactContent,
+  WRITING_ARTIFACT_TYPES,
+} from '@/lib/agent/display';
 
 function formatAgentName(agentName: string) {
   return agentName
@@ -88,6 +90,8 @@ export default function AgentTab({
   const previewChapter = book.chapters.find(isDisplayReadyChapter) || book.chapters[0];
   const latestArtifact =
     artifactItems
+      .filter((item) => WRITING_ARTIFACT_TYPES.has(item.artifactType ?? ''))
+      .filter((item) => isPreviewableArtifactContent(item.artifactContent ?? '', item.artifactType))
       .slice()
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .at(-1) ?? null;
@@ -100,7 +104,11 @@ export default function AgentTab({
     activePreviewArtifact && !WRITING_ARTIFACT_TYPES.has(activePreviewArtifact.artifactType ?? '')
       ? undefined
       : previewChapter;
-  const hasPreview = Boolean(streamedDocumentText || activePreview || previewChapterForCanvas);
+  const hasPreview = Boolean(
+    (streamedDocumentText && isPreviewableArtifactContent(streamedDocumentText, 'draft')) ||
+      activePreview ||
+      previewChapterForCanvas,
+  );
 
   useEffect(() => {
     if (!isPreviewOpen || !activePreview?.artifactId) return;

@@ -21,12 +21,6 @@ def route_next_task(state: BookishAgentState) -> str:
         return "end"
 
     agent = tasks[idx].get("agent")
-    if agent in {
-        "researcher",
-        "writer",
-        "editor",
-        "world_builder",
-    }:
+    if agent in {"writer", "world_builder"}:
         return agent
     return "end"
-

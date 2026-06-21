@@ -7,24 +7,19 @@ type StreamRunInput =
   | {
       projectId: string;
       message: string;
-      chatSessionId: string;
       command?: never;
     }
   | {
       command: { resume: unknown };
-      projectId?: never;
+      projectId: string;
       message?: never;
-      chatSessionId?: never;
     };
 
-export async function createAgentThread(
-  projectId: string,
-  chatSessionId: string,
-): Promise<AgentThread> {
+export async function createAgentThread(projectId: string): Promise<AgentThread> {
   const response = await fetch(`${API_BASE_URL}${endpoints.agent.threads}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId, chatSessionId }),
+    body: JSON.stringify({ projectId }),
   });
 
   if (!response.ok) {
@@ -76,4 +71,3 @@ export async function streamAgentRun(
   buffer += decoder.decode();
   if (buffer.trim()) parseLine(buffer);
 }
-

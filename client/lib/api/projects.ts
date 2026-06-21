@@ -54,17 +54,24 @@ export const uploadAssetFile = (id: string, file: File, type?: string) => {
 export const fetchArtifact = (id: string, artifactId: string) =>
   request<GeneratedArtifact>(endpoints.projects.artifact(id, artifactId));
 
-export const fetchProjectMessages = (id: string, sessionId?: string) =>
-  request<unknown[]>(endpoints.projects.messages(id, sessionId));
+export const fetchProjectMessages = (id: string, threadId?: string) =>
+  request<unknown[]>(endpoints.projects.messages(id, threadId));
 
-export const fetchChatSessions = (id: string) =>
-  request<ChatSession[]>(endpoints.projects.chatSessions(id));
+export const fetchChatThreads = (id: string) =>
+  request<ChatSession[]>(endpoints.projects.chatThreads(id));
 
-export const createChatSession = (id: string) =>
-  request<ChatSession>(endpoints.projects.chatSessions(id), { method: 'POST' });
+export const createChatThread = (id: string) =>
+  request<ChatSession>(endpoints.projects.chatThreads(id), { method: 'POST' });
 
-export const clearChatSessionMessages = (id: string, sessionId: string) =>
-  request<{ status: string; sessionId: string; deleted: number }>(
-    endpoints.projects.clearChatSession(id, sessionId),
+export const clearChatThreadMessages = (id: string, threadId: string) =>
+  request<{ status: string; threadId: string; deleted: number }>(
+    endpoints.projects.clearChatThread(id, threadId),
     { method: 'DELETE' },
   );
+
+/** @deprecated Use fetchChatThreads */
+export const fetchChatSessions = fetchChatThreads;
+/** @deprecated Use createChatThread */
+export const createChatSession = createChatThread;
+/** @deprecated Use clearChatThreadMessages */
+export const clearChatSessionMessages = clearChatThreadMessages;

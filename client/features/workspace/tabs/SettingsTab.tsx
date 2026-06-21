@@ -14,14 +14,6 @@ interface SettingsTabProps {
   setWriterProvider: (value: ProviderType) => void;
   writerModel: string;
   setWriterModel: (value: string) => void;
-  researcherProvider: ProviderType;
-  setResearcherProvider: (value: ProviderType) => void;
-  researcherModel: string;
-  setResearcherModel: (value: string) => void;
-  editorProvider: ProviderType;
-  setEditorProvider: (value: ProviderType) => void;
-  editorModel: string;
-  setEditorModel: (value: string) => void;
   worldBuilderProvider: ProviderType;
   setWorldBuilderProvider: (value: ProviderType) => void;
   worldBuilderModel: string;

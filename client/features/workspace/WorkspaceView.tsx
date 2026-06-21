@@ -120,7 +120,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-screen bg-white font-sans text-zinc-900 antialiased selection:bg-zinc-200">
       <WorkspaceSidebar
-        activeChatSessionId={activeChatSessionId}
+        activeChatSessionId={activeChatSessionId ?? ''}
         activeTab={activeTab}
         chatSessions={chatSessions}
         isHistoryPanelOpen={isHistoryPanelOpen}
@@ -161,7 +161,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               onResume={chat.resume}
               streamedDocumentText={chat.streamedDocumentText}
               chatSessions={chatSessions}
-              activeChatSessionId={activeChatSessionId}
+              activeChatSessionId={activeChatSessionId ?? ''}
               onSwitchChatSession={switchChatSession}
               onNewChatSession={startNewChatSession}
               onClearChatSession={clearActiveChatSession}
@@ -190,14 +190,6 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               setWriterProvider={settings.setWriterProvider}
               writerModel={settings.writerModel}
               setWriterModel={settings.setWriterModel}
-              researcherProvider={settings.researcherProvider}
-              setResearcherProvider={settings.setResearcherProvider}
-              researcherModel={settings.researcherModel}
-              setResearcherModel={settings.setResearcherModel}
-              editorProvider={settings.editorProvider}
-              setEditorProvider={settings.setEditorProvider}
-              editorModel={settings.editorModel}
-              setEditorModel={settings.setEditorModel}
               worldBuilderProvider={settings.worldBuilderProvider}
               setWorldBuilderProvider={settings.setWorldBuilderProvider}
               worldBuilderModel={settings.worldBuilderModel}

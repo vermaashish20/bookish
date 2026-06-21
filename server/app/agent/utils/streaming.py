@@ -1,4 +1,9 @@
-"""LangGraph custom stream helpers."""
+"""LangGraph custom stream helpers.
+
+Emit application UI events on the `custom` channel via get_stream_writer().
+The API forwards `custom` and `tasks` channels to the frontend; see
+https://docs.langchain.com/oss/python/langgraph/event-streaming
+"""
 from __future__ import annotations
 
 import logging

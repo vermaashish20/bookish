@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agent, projects, settings
+from app.api import agent, projects
 from app.infrastructure.database.mongo import init_db
 
 logging.basicConfig(
@@ -40,7 +40,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     application.include_router(projects.router)
-    application.include_router(settings.router)
     application.include_router(agent.router)
 
     @application.get("/")

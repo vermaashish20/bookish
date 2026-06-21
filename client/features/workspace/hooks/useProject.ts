@@ -3,15 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  clearChatSessionMessages,
-  createChatSession,
-  fetchChatSessions,
+  clearChatThreadMessages,
+  createChatThread,
+  fetchChatThreads,
   fetchProject,
   fetchProjectMessages,
 } from '@/lib/api';
 import type { BookProject, ChatMessage, ChatSession } from '@/lib/types';
-
-const DEFAULT_CHAT_SESSION_ID = 'default';
+import { sanitizeAssistantText } from '@/lib/agent/display';
 
 type PersistedChatMessage = {
   id?: string;
@@ -20,6 +19,13 @@ type PersistedChatMessage = {
   content?: string;
   createdAt?: string;
 };
+
+function normalizeThread(session: ChatSession & { threadId?: string }): ChatSession {
+  return {
+    ...session,
+    id: session.id ?? session.threadId ?? 'unknown',
+  };
+}
 
 function chatSenderFromRole(role?: string): ChatMessage['sender'] {
   if (role === 'user') return 'user';
@@ -30,7 +36,10 @@ function mapPersistedMessages(messages: PersistedChatMessage[]): ChatMessage[] {
   return messages.map((message, index) => ({
     id: message.id ?? message._id ?? `persisted-${index}`,
     sender: chatSenderFromRole(message.role),
-    text: message.content ?? '',
+    text:
+      message.role === 'user'
+        ? message.content ?? ''
+        : sanitizeAssistantText(message.content ?? ''),
     timestamp: message.createdAt ?? new Date().toISOString(),
   }));
 }
@@ -39,16 +48,16 @@ export function useProject(projectId: string) {
   const router = useRouter();
   const [book, setBook] = useState<BookProject | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeChatSessionId, setActiveChatSessionId] = useState(DEFAULT_CHAT_SESSION_ID);
+  const [chatThreads, setChatThreads] = useState<ChatSession[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const updateBook = useCallback((updated: BookProject) => {
     setBook(updated);
   }, []);
 
-  const loadMessagesForSession = useCallback(async (sessionId: string) => {
-    const messages = await fetchProjectMessages(projectId, sessionId).catch(() => []);
+  const loadMessagesForThread = useCallback(async (threadId: string) => {
+    const messages = await fetchProjectMessages(projectId, threadId).catch(() => []);
     setChatMessages(mapPersistedMessages(messages as PersistedChatMessage[]));
   }, [projectId]);
 
@@ -58,21 +67,21 @@ export function useProject(projectId: string) {
 
     Promise.all([
       fetchProject(projectId),
-      fetchChatSessions(projectId).catch(() => []),
+      fetchChatThreads(projectId).catch(() => []),
     ])
-      .then(async ([project, sessions]) => {
+      .then(async ([project, threads]) => {
         if (cancelled) return;
-        const normalizedSessions = (sessions as ChatSession[]);
-        const initialSessionId = normalizedSessions[0]?.id ?? DEFAULT_CHAT_SESSION_ID;
+        const normalizedThreads = (threads as ChatSession[]).map(normalizeThread);
+        const initialThreadId = normalizedThreads[0]?.id ?? null;
         setBook(project);
-        setChatSessions(
-          normalizedSessions.length
-            ? normalizedSessions
-            : [{ id: DEFAULT_CHAT_SESSION_ID, title: 'Default chat', messageCount: 0 }],
-        );
-        setActiveChatSessionId(initialSessionId);
-        const messages = await fetchProjectMessages(projectId, initialSessionId).catch(() => []);
-        if (!cancelled) setChatMessages(mapPersistedMessages(messages as PersistedChatMessage[]));
+        setChatThreads(normalizedThreads);
+        setActiveThreadId(initialThreadId);
+        if (initialThreadId) {
+          const messages = await fetchProjectMessages(projectId, initialThreadId).catch(() => []);
+          if (!cancelled) setChatMessages(mapPersistedMessages(messages as PersistedChatMessage[]));
+        } else {
+          setChatMessages([]);
+        }
       })
       .catch(() => {
         if (!cancelled) router.push('/');
@@ -86,29 +95,30 @@ export function useProject(projectId: string) {
     };
   }, [projectId, router]);
 
-  const switchChatSession = useCallback(async (sessionId: string) => {
-    setActiveChatSessionId(sessionId);
-    await loadMessagesForSession(sessionId);
-  }, [loadMessagesForSession]);
+  const switchChatThread = useCallback(async (threadId: string) => {
+    setActiveThreadId(threadId);
+    await loadMessagesForThread(threadId);
+  }, [loadMessagesForThread]);
 
-  const startNewChatSession = useCallback(async () => {
-    const session = await createChatSession(projectId);
-    setChatSessions((prev) => [session, ...prev.filter((item) => item.id !== session.id)]);
-    setActiveChatSessionId(session.id);
+  const startNewChatThread = useCallback(async () => {
+    const thread = normalizeThread(await createChatThread(projectId));
+    setChatThreads((prev) => [thread, ...prev.filter((item) => item.id !== thread.id)]);
+    setActiveThreadId(thread.id);
     setChatMessages([]);
   }, [projectId]);
 
-  const clearActiveChatSession = useCallback(async () => {
-    await clearChatSessionMessages(projectId, activeChatSessionId);
+  const clearActiveChatThread = useCallback(async () => {
+    if (!activeThreadId) return;
+    await clearChatThreadMessages(projectId, activeThreadId);
     setChatMessages([]);
-    setChatSessions((prev) =>
-      prev.map((session) =>
-        session.id === activeChatSessionId
-          ? { ...session, messageCount: 0, updatedAt: null }
-          : session,
+    setChatThreads((prev) =>
+      prev.map((thread) =>
+        thread.id === activeThreadId
+          ? { ...thread, messageCount: 0, updatedAt: null }
+          : thread,
       ),
     );
-  }, [activeChatSessionId, projectId]);
+  }, [activeThreadId, projectId]);
 
   return {
     book,
@@ -116,11 +126,16 @@ export function useProject(projectId: string) {
     updateBook,
     chatMessages,
     setChatMessages,
-    chatSessions,
-    activeChatSessionId,
-    switchChatSession,
-    startNewChatSession,
-    clearActiveChatSession,
+    chatThreads,
+    chatSessions: chatThreads,
+    activeThreadId,
+    activeChatSessionId: activeThreadId,
+    switchChatThread,
+    switchChatSession: switchChatThread,
+    startNewChatThread,
+    startNewChatSession: startNewChatThread,
+    clearActiveChatThread,
+    clearActiveChatSession: clearActiveChatThread,
     loading,
   };
 }

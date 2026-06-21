@@ -11,6 +11,29 @@ from app.repositories.agent_runs import get_project_agent_runs
 from app.repositories.artifacts import get_project_artifacts
 
 
+DEFAULT_PROJECT_SETTINGS: Dict[str, Any] = {
+    "plannerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+    "writerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+    "worldBuilderModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+}
+
+
+def get_project_settings(project_id: str) -> Dict[str, Any]:
+    db = get_db()
+    project = db.projects.find_one({"_id": project_id}, {"settings": 1})
+    if not project:
+        return {}
+    return project.get("settings", {})
+
+
+def update_project_settings(project_id: str, settings: Dict[str, Any]) -> None:
+    db = get_db()
+    db.projects.update_one(
+        {"_id": project_id},
+        {"$set": {"settings": settings}},
+    )
+
+
 def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     """
     Full project payload for the workspace view.

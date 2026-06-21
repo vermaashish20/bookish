@@ -380,6 +380,92 @@ def read_artifact(project_id: str, args: Dict[str, Any]) -> str:
     )
 
 
+def search_project(
+    project_id: str,
+    args: Dict[str, Any],
+    *,
+    run_id: Optional[str],
+    agent: Optional[str],
+    task: Optional[str],
+) -> str:
+    """Chroma semantic search over project knowledge."""
+    return _search(
+        project_id=project_id,
+        args=args,
+        default_scopes=["assets", "narrative", "characters", "world", "continuity", "style"],
+        run_id=run_id,
+        agent=agent,
+        task=task,
+        intent=args.get("intent") or "search_project",
+    )
+
+
+def read_project(
+    project_id: str,
+    args: Dict[str, Any],
+    *,
+    run_id: Optional[str] = None,
+    agent: Optional[str] = None,
+    task: Optional[str] = None,
+) -> str:
+    """Exact Mongo reads routed by resource surface."""
+    resource = str(args.get("resource") or "").strip().lower()
+    operation = str(args.get("operation") or "list").strip().lower()
+    record_id = args.get("id")
+    number = args.get("number")
+    name = args.get("name")
+
+    if resource in {"sources", "assets", "user_assets"}:
+        if operation == "list":
+            return list_user_assets(project_id, args)
+        if record_id or name:
+            return read_user_asset(project_id, args)
+        return read_project_sources(project_id, args)
+    if resource in {"chapters", "narrative"}:
+        if operation == "list" or not (record_id or number):
+            return list_chapters(project_id, args)
+        return read_chapter(
+            project_id,
+            {
+                **args,
+                "chapter_id": record_id,
+                "chapter_number": number,
+            },
+        )
+    if resource in {"characters", "character"}:
+        if operation == "list" or not (record_id or name):
+            return list_characters(project_id, args)
+        return read_character(
+            project_id,
+            {**args, "character_id": record_id},
+        )
+    if resource in {"world", "entities", "entity"}:
+        if operation == "list" or not (record_id or name):
+            return list_world_entities(project_id, args)
+        return read_world_entity(
+            project_id,
+            {**args, "entity_id": record_id},
+        )
+    if resource in {"artifacts", "artifact"}:
+        if operation == "list" or not record_id:
+            return list_artifacts(project_id, args)
+        return read_artifact(project_id, {**args, "artifact_id": record_id})
+    if resource == "project":
+        from app.repositories.projects import get_project
+
+        project = get_project(project_id) or {}
+        return _format_doc(
+            "PROJECT",
+            project,
+            ["title", "subtitle", "genre", "tonality", "createdAt"],
+        )
+
+    return (
+        "[read_project] Error: unknown resource. Use one of: "
+        "sources, chapters, characters, world, artifacts, project."
+    )
+
+
 def retrieve_knowledge(
     project_id: str,
     args: Dict[str, Any],
@@ -487,9 +573,12 @@ def execute_knowledge_tool(
     args = args or {}
     normalized = tool_name.strip()
 
-    if normalized in {"describe_knowledge_tools", "knowledge_tool_catalog"}:
-        return describe_knowledge_tools()
+    if normalized == "search_project":
+        return search_project(project_id, args, run_id=run_id, agent=agent, task=task)
+    if normalized == "read_project":
+        return read_project(project_id, args, run_id=run_id, agent=agent, task=task)
 
+    # Legacy router kept for internal/backward compatibility.
     if normalized == "retrieve_knowledge":
         return retrieve_knowledge(
             project_id,
@@ -500,45 +589,10 @@ def execute_knowledge_tool(
         )
 
     if normalized == "search_knowledge":
-        return _search(
-            project_id=project_id,
-            args=args,
-            default_scopes=["assets", "narrative", "characters", "world", "continuity", "style"],
-            run_id=run_id,
-            agent=agent,
-            task=task,
-            intent="general_knowledge",
-        )
+        return search_project(project_id, args, run_id=run_id, agent=agent, task=task)
 
-    scope_tools = {
-        "search_narrative": ["narrative"],
-        "search_chapters": ["narrative"],
-        "search_characters": ["characters"],
-        "search_character_voice": ["character_voice"],
-        "search_world": ["world"],
-        "search_entities": ["entities"],
-        "search_locations": ["locations"],
-        "search_organizations": ["organizations"],
-        "search_objects": ["objects"],
-        "search_timeline": ["timeline"],
-        "search_plot": ["plot"],
-        "search_plot_threads": ["plot"],
-        "search_continuity": ["continuity"],
-        "search_style": ["style"],
-        "search_assets": ["assets"],
-        "search_artifacts": ["artifacts"],
-    }
-    if normalized in scope_tools:
-        return _search(
-            project_id=project_id,
-            args=args,
-            default_scopes=scope_tools[normalized],
-            run_id=run_id,
-            agent=agent,
-            task=task,
-            intent=normalized,
-        )
-
+    if normalized == "read_project_sources":
+        return read_project_sources(project_id, args)
     if normalized == "list_chapters":
         return list_chapters(project_id, args)
     if normalized == "read_chapter":
@@ -551,37 +605,13 @@ def execute_knowledge_tool(
         return list_world_entities(project_id, args)
     if normalized == "read_world_entity":
         return read_world_entity(project_id, args)
-    if normalized == "read_formal_memory":
-        return read_formal_memory(project_id, args)
     if normalized == "list_user_assets":
         return list_user_assets(project_id, args)
     if normalized == "read_user_asset":
         return read_user_asset(project_id, args)
-    if normalized == "read_project_sources":
-        return read_project_sources(project_id, args)
     if normalized == "list_artifacts":
         return list_artifacts(project_id, args)
     if normalized == "read_artifact":
         return read_artifact(project_id, args)
-    if normalized == "read_scene":
-        return "[read_scene] Scenes are not split into a dedicated collection yet. Use search_narrative or read_chapter."
-    if normalized in {"read_plot_threads", "read_continuity_facts", "read_style_guide"}:
-        scope = {
-            "read_plot_threads": ["plot"],
-            "read_continuity_facts": ["continuity"],
-            "read_style_guide": ["style"],
-        }[normalized]
-        return _search(
-            project_id=project_id,
-            args=args,
-            default_scopes=scope,
-            run_id=run_id,
-            agent=agent,
-            task=task,
-            intent=normalized,
-        )
-    if normalized == "search_web":
-        query = _coerce_query(args)
-        return f"[search_web] No live web search configured for '{query}'. Use Knowledge Base tools for project knowledge."
 
     return f"[Knowledge Tool: {tool_name}] Unknown tool."

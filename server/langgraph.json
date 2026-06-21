@@ -3,5 +3,12 @@
   "graphs": {
     "bookish": "./app/agent/agent.py:graph"
   },
-  "env": ".env"
+  "env": ".env",
+  "checkpointer": {
+    "serde": {
+      "allowed_json_modules": [
+        ["app", "agent", "utils", "state"]
+      ]
+    }
+  }
 }

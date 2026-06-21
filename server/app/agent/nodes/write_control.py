@@ -4,8 +4,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from langgraph.types import interrupt
+from langgraph.runtime import Runtime
+from langgraph.types import RunnableConfig, interrupt
 
+from app.agent.utils.context_schema import BookishContext
+from app.agent.utils.memory import update_narrative_after_write
 from app.agent.utils.state import BookishAgentState, PendingWrite
 from app.agent.utils.streaming import emit_custom
 from app.repositories.chapters import add_chapter, update_chapter_content
@@ -13,23 +16,28 @@ from app.repositories.characters import add_character, update_character
 from app.repositories.entities import add_entity, update_entity
 
 
-def approve_write_node(state: BookishAgentState) -> dict[str, Any]:
+def approve_write_node(
+    state: BookishAgentState,
+    runtime: Runtime[BookishContext],
+    config: RunnableConfig,
+) -> dict[str, Any]:
     pending_write = state.get("pendingWrite")
     if not pending_write:
         return {"status": "running"}
 
+    thread_id = (config.get("configurable") or {}).get("thread_id")
     emit_custom(
         "write_proposed",
         runId=state["agentRunId"],
-        projectId=state["projectId"],
+        projectId=runtime.context.project_id,
         pendingWrite=pending_write,
     )
     response = interrupt(
         {
             "kind": "write_approval",
             "runId": state["agentRunId"],
-            "projectId": state["projectId"],
-            "threadId": state["threadId"],
+            "projectId": runtime.context.project_id,
+            "threadId": thread_id,
             "summary": _approval_summary(pending_write),
             "pendingWrite": _safe_pending_write(pending_write),
             "prompt": "Approve this durable project write?",
@@ -44,7 +52,7 @@ def approve_write_node(state: BookishAgentState) -> dict[str, Any]:
     emit_custom(
         "write_approved" if approved else "write_rejected",
         runId=state["agentRunId"],
-        projectId=state["projectId"],
+        projectId=runtime.context.project_id,
         pendingWrite=_safe_pending_write(next_write),
     )
     return {
@@ -53,7 +61,10 @@ def approve_write_node(state: BookishAgentState) -> dict[str, Any]:
     }
 
 
-def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
+def commit_write_node(
+    state: BookishAgentState,
+    runtime: Runtime[BookishContext],
+) -> dict[str, Any]:
     pending_write = state.get("pendingWrite")
     if not pending_write or pending_write.get("status") != "approved":
         return {"pendingWrite": None, "status": "running"}
@@ -63,10 +74,11 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
     updates: dict[str, Any] = {"pendingWrite": None, "status": "running"}
     tasks = list(state.get("tasks", []))
     task_index = pending_write.get("taskIndex")
+    project_id = runtime.context.project_id
 
     if kind == "chapter_create":
         chapter_id = add_chapter(
-            project_id=state["projectId"],
+            project_id=project_id,
             number=int(payload["number"]),
             title=str(payload["title"]),
             content=str(payload.get("content") or ""),
@@ -76,6 +88,12 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
         )
         _set_task_chapter_id(tasks, task_index, chapter_id)
         updates["tasks"] = tasks
+        update_narrative_after_write(
+            runtime.store,
+            project_id,
+            kind="chapter_create",
+            payload={**payload, "chapterId": chapter_id, "id": chapter_id},
+        )
         emit_custom(
             "chapter_upserted",
             runId=state["agentRunId"],
@@ -91,6 +109,12 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
                 status=str(payload.get("status") or "completed"),
                 summary=payload.get("summary"),
             )
+            update_narrative_after_write(
+                runtime.store,
+                project_id,
+                kind="chapter_update",
+                payload={**payload, "chapterId": chapter_id, "id": chapter_id},
+            )
             emit_custom(
                 "chapter_upserted",
                 runId=state["agentRunId"],
@@ -98,7 +122,7 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
             )
     elif kind == "character_create":
         character_id = add_character(
-            project_id=state["projectId"],
+            project_id=project_id,
             name=str(payload.get("name") or "Unnamed Character"),
             role=str(payload.get("role") or "supporting"),
             arc=str(payload.get("arc") or payload.get("description") or ""),
@@ -122,7 +146,7 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
             emit_custom("memory_upserted", runId=state["agentRunId"], memoryId=character_id)
     elif kind == "entity_create":
         entity_id = add_entity(
-            project_id=state["projectId"],
+            project_id=project_id,
             name=str(payload.get("name") or "Unnamed Entity"),
             entity_type=str(payload.get("type") or payload.get("entityType") or "concept"),
             description=str(payload.get("description") or ""),
@@ -145,7 +169,7 @@ def commit_write_node(state: BookishAgentState) -> dict[str, Any]:
     emit_custom(
         "write_committed",
         runId=state["agentRunId"],
-        projectId=state["projectId"],
+        projectId=project_id,
         pendingWrite=_safe_pending_write({**pending_write, "status": "committed"}),
     )
     return updates

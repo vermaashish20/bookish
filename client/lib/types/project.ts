@@ -105,9 +105,7 @@ export interface ModelConfig {
 
 export interface ProjectSettings {
   plannerModel: ModelConfig;
-  researcherModel: ModelConfig;
   writerModel: ModelConfig;
-  editorModel: ModelConfig;
   worldBuilderModel: ModelConfig;
 }
 

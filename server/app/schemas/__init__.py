@@ -4,9 +4,9 @@ from app.schemas.chapter import Chapter, ChapterSummary
 from app.schemas.character import Character
 from app.schemas.chat_message import ChatMessage
 from app.schemas.entity import Entity
-from app.schemas.project import ModelConfig, Project, ProjectSettings
+from app.schemas.project import ModelConfig, Project, ProjectSettings, UpdateSettingsPayload
 from app.schemas.user_asset import UserAsset
-from .api import AssetUploadPayload, CreateProjectPayload, SettingsModel, UpdateSettingsPayload
+from .api import AssetUploadPayload, CreateProjectPayload
 
 __all__ = [
     "AgentExecution",
@@ -23,7 +23,6 @@ __all__ = [
     "PlannerDecision",
     "Project",
     "ProjectSettings",
-    "SettingsModel",
     "UpdateSettingsPayload",
     "UserAsset",
 ]
