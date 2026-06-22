@@ -50,3 +50,143 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Public marketing / reader theme (from index.html) */
+.bookish-public {
+  color-scheme: light dark;
+  --bookish-page: #f8f7f2;
+  --bookish-paper: #fffffb;
+  --bookish-ink: #161713;
+  --bookish-muted: #6f756b;
+  --bookish-line: #dedbd0;
+  --bookish-accent: #235c45;
+  --bookish-accent-hover: #174432;
+  --bookish-radius: 24px;
+  min-height: 100dvh;
+  color: var(--bookish-ink);
+  letter-spacing: -0.01em;
+  background:
+    radial-gradient(circle at 10% 0%, rgb(225 235 223 / 0.8), transparent 34rem),
+    var(--bookish-page);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bookish-public {
+    --bookish-page: #10120f;
+    --bookish-paper: #161a15;
+    --bookish-ink: #f4f2ea;
+    --bookish-muted: #a8aea1;
+    --bookish-line: #30382d;
+    --bookish-accent: #8dcaa4;
+    --bookish-accent-hover: #a9ddbb;
+    background:
+      radial-gradient(circle at 10% 0%, rgb(42 70 50 / 0.5), transparent 34rem),
+      var(--bookish-page);
+  }
+}
+
+.bookish-nav {
+  background: color-mix(in srgb, var(--bookish-page) 88%, transparent);
+}
+
+.bookish-wrap {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.bookish-nav-link,
+.bookish-login-button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bookish-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 640;
+  padding: 9px 13px;
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.bookish-login-button {
+  background: var(--bookish-accent);
+  color: #fff;
+  padding: 10px 16px;
+  font-weight: 760;
+  box-shadow: 0 12px 30px rgb(35 92 69 / 0.18);
+}
+
+.bookish-nav-link:hover {
+  color: var(--bookish-ink);
+  background: rgb(22 23 19 / 0.055);
+}
+
+.bookish-login-button:hover {
+  color: #fff;
+  background: var(--bookish-accent-hover);
+}
+
+.bookish-nav-link:active,
+.bookish-login-button:active,
+.bookish-cta:active {
+  transform: translateY(1px);
+}
+
+.bookish-cta {
+  border: 0;
+  border-radius: 999px;
+  background: var(--bookish-accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 760;
+  padding: 14px 19px;
+  white-space: nowrap;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.bookish-cta:hover {
+  background: var(--bookish-accent-hover);
+}
+
+.bookish-composer {
+  border: 1px solid rgb(22 23 19 / 0.09);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bookish-paper) 90%, transparent);
+  box-shadow:
+    0 26px 90px rgb(31 35 28 / 0.12),
+    inset 0 1px 0 rgb(255 255 251 / 0.72);
+  padding: 8px;
+}
+
+.bookish-prose p {
+  margin: 0 0 1.1em;
+}
+
+.bookish-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.bookish-fade {
+  animation: bookish-fade 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bookish-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .bookish-wrap {
+    width: min(calc(100% - 28px), 1120px);
+  }
+
+  .bookish-composer {
+    border-radius: 22px;
+  }
+}
+

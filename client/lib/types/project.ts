@@ -118,6 +118,8 @@ export interface BookProject {
   artifacts?: GeneratedArtifact[];
   memory: MemoryState;
   settings?: ProjectSettings;
+  chapterCount?: number;
+  publishedChapterCount?: number;
 }
 
 export interface ChatMessage {

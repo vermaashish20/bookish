@@ -120,6 +120,10 @@ def get_project_summary(project_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     asset_count = db.user_assets.count_documents({"projectId": project_id})
+    chapter_count = db.chapters.count_documents({"projectId": project_id})
+    published_chapter_count = db.chapters.count_documents(
+        {"projectId": project_id, "status": {"$in": ["published", "completed"]}}
+    )
     first_asset = db.user_assets.find_one(
         {"projectId": project_id},
         sort=[("addedAt", 1)],
@@ -153,6 +157,8 @@ def get_project_summary(project_id: str) -> Optional[Dict[str, Any]]:
         "createdAt":  p["createdAt"],
         "assets":     formatted_assets,
         "assetCount": asset_count,
+        "chapterCount": chapter_count,
+        "publishedChapterCount": published_chapter_count,
     }
 
 
