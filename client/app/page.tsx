@@ -10,6 +10,7 @@ import {
   PlanSection,
   UseCasesSection,
 } from '@/components/public/marketing/MarketingSections';
+import { AuthenticatedDashboard } from '@/components/public/marketing/AuthenticatedDashboard';
 import { PublicFooter } from '@/components/public/PublicFooter';
 import { PublicNav } from '@/components/public/PublicNav';
 import { useAuth } from '@/contexts/AuthProvider';
@@ -24,7 +25,7 @@ const PROMPT_CHIPS = [
 
 export default function PublicHomePage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [prompt, setPrompt] = useState('');
 
   const handleStartBook = (event: FormEvent) => {
@@ -54,41 +55,25 @@ export default function PublicHomePage() {
           onPromptChange={setPrompt}
           onSubmit={handleStartBook}
           isAuthenticated={isAuthenticated}
+          username={user?.username}
           promptChips={PROMPT_CHIPS}
           onChipClick={setPrompt}
         />
 
-        <div className="bookish-wrap">
-          <div className="h-px bg-[var(--bookish-line)]" />
-        </div>
-
-        <ImagineSection />
-
-        <div className="bookish-wrap">
-          <div className="h-px bg-[var(--bookish-line)]" />
-        </div>
-
-        <MemorySection />
-
-        <div className="bookish-wrap">
-          <div className="h-px bg-[var(--bookish-line)]" />
-        </div>
-
-        <UseCasesSection />
-
-        <div className="bookish-wrap">
-          <div className="h-px bg-[var(--bookish-line)]" />
-        </div>
-
-        <PlanSection />
-
-        <div className="bookish-wrap">
-          <div className="h-px bg-[var(--bookish-line)]" />
-        </div>
-
-        <LongBookSection />
-
-        <FinalCtaSection />
+        {isAuthenticated ? (
+          /* Logged-in: show workspace cards + Get Inspired */
+          <AuthenticatedDashboard />
+        ) : (
+          /* Logged-out: show marketing sections */
+          <>
+            <ImagineSection />
+            <MemorySection />
+            <UseCasesSection />
+            <PlanSection />
+            <LongBookSection />
+            <FinalCtaSection />
+          </>
+        )}
       </main>
 
       <PublicFooter />

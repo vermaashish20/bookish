@@ -1,15 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent } from 'react';
+import { FormEvent, useMemo } from 'react';
+import { Sparkles, Wand2 } from 'lucide-react';
 
 interface HomeHeroProps {
   prompt: string;
   onPromptChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
   isAuthenticated: boolean;
+  username?: string;
   promptChips: string[];
   onChipClick: (chip: string) => void;
+}
+
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export function HomeHero({
@@ -17,32 +26,59 @@ export function HomeHero({
   onPromptChange,
   onSubmit,
   isAuthenticated,
+  username,
   promptChips,
   onChipClick,
 }: HomeHeroProps) {
-  return (
-    <section className="py-[82px] pb-14 text-center sm:py-14">
-      <div className="bookish-wrap">
-        <p className="bookish-fade mx-auto mb-4 w-fit rounded-full border border-[var(--bookish-line)] bg-[rgb(255_255_251/0.62)] px-3 py-2 text-[13px] font-[680] text-[var(--bookish-accent)]">
-          Multi-agent book workspace
-        </p>
-        <h1 className="bookish-fade mx-auto max-w-[720px] text-[clamp(38px,6.2vw,68px)] leading-[0.98] tracking-[-0.07em] text-balance text-[var(--bookish-ink)]">
-          A quiet place to make books with AI.
-        </h1>
-        <p className="bookish-fade mx-auto mt-5 max-w-[540px] text-[15px] leading-[1.6] text-[var(--bookish-muted)]">
-          You bring the imagination: plots, characters, worlds, tone. Bookish agents remember it
-          all and help you plan, draft, and refine chapters without losing the thread.
-        </p>
+  const greeting = useMemo(() => timeGreeting(), []);
+  const displayName = username
+    ? username.charAt(0).toUpperCase() + username.slice(1)
+    : '';
 
-        <div
-          className="bookish-fade mx-auto mt-9 w-full max-w-[820px] text-left sm:mt-9"
-          aria-label="Start writing with AI"
-        >
-          <div className="bookish-composer">
-            <form
-              onSubmit={onSubmit}
-              className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[1fr_auto]"
+  return (
+    <section className={`relative overflow-hidden bg-white text-center ${isAuthenticated ? 'pt-40 pb-16' : 'pt-36 pb-24'}`}>
+      {/* Radial magic glow */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 30%, rgba(5, 150, 105, 0.06) 0%, transparent 60%), radial-gradient(circle at 70% 50%, rgba(13, 148, 136, 0.04) 0%, transparent 50%)',
+        }}
+      />
+
+      <div className="bookish-wrap relative z-10 flex flex-col items-center">
+        {/* Heading — personalised when logged in */}
+        {isAuthenticated && displayName ? (
+          <h1 className="bookish-fade max-w-[820px] text-[clamp(2rem,3.2vw,2.8rem)] leading-[1.15] tracking-tight font-medium mb-10">
+            {greeting},{' '}
+            <em className="not-italic text-[var(--bookish-accent)] italic">{displayName}.</em>
+          </h1>
+        ) : (
+          <>
+            <h1 className="bookish-fade max-w-[820px] text-[clamp(3.5rem,6.2vw,6rem)] leading-[1.05] tracking-tight font-medium mb-6 drop-shadow-sm">
+              Your story deserves{' '}
+              <em className="not-italic text-[var(--bookish-accent)] italic">to be written.</em>
+            </h1>
+
+            {/* Subtitle — only when logged out */}
+            <p
+              className="bookish-fade text-[var(--bookish-muted)] text-lg md:text-xl max-w-[58ch] leading-relaxed mb-12"
+              style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
             >
+              A magical workspace where your ideas become legendary manuscripts. You direct the lore,
+              characters, and plot. Bookish agents flawlessly write the chapters.
+            </p>
+          </>
+        )}
+
+        {/* Glowing pill search bar */}
+        <div className="w-full max-w-[820px] relative group">
+          <div className="absolute -inset-[3px] rounded-full bg-gradient-to-r from-emerald-200 via-teal-200 to-cyan-200 blur-md opacity-30 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none" />
+
+          <div className="relative bookish-composer flex items-center transition-all duration-300 hover:ring-1 hover:ring-[color:var(--bookish-accent)]/20">
+            <Sparkles className="ml-5 h-[18px] w-[18px] text-[var(--bookish-accent)] animate-pulse shrink-0" />
+
+            <form onSubmit={onSubmit} className="flex flex-1 items-center">
               <label className="sr-only" htmlFor="bookPrompt">
                 Book idea
               </label>
@@ -50,64 +86,47 @@ export function HomeHero({
                 id="bookPrompt"
                 type="text"
                 autoComplete="off"
-                placeholder="Write a cozy fantasy about a city that trades in memories"
+                placeholder="A tale of a forgotten elven king who seeks vengeance..."
                 value={prompt}
                 onChange={(e) => onPromptChange(e.target.value)}
-                className="min-w-0 border-0 bg-transparent px-[18px] py-3.5 text-base text-[var(--bookish-ink)] outline-none placeholder:text-[#808478]"
+                className="flex-1 min-w-0 border-0 bg-transparent px-5 py-3.5 text-base md:text-lg text-[var(--bookish-ink)] outline-none"
+                style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
               />
-              <button type="submit" className="bookish-cta w-full sm:w-auto">
-                Start book
+              <button type="submit" className="bookish-cta m-2 flex items-center gap-2 shrink-0">
+                Start writing <Wand2 className="h-[14px] w-[14px]" />
               </button>
             </form>
           </div>
-
-          <div
-            className="flex flex-wrap justify-center gap-2 px-1.5 pt-3.5"
-            aria-label="Prompt examples"
-          >
-            {promptChips.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => onChipClick(chip)}
-                className="rounded-full border border-[color-mix(in_srgb,var(--bookish-line)_76%,transparent)] bg-[rgb(255_255_251/0.34)] px-2.5 py-1.5 text-xs text-[var(--bookish-muted)] transition hover:text-[var(--bookish-ink)]"
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {isAuthenticated && (
-          <div className="bookish-fade mx-auto mt-6 grid max-w-[620px] justify-center gap-2.5">
-            <Link
-              href="/workspace"
-              className="grid grid-cols-1 items-center gap-5 rounded-[18px] border border-[var(--bookish-line)] bg-[rgb(255_255_251/0.64)] px-4 py-3.5 text-left transition hover:border-[color-mix(in_srgb,var(--bookish-accent)_34%,var(--bookish-line))] sm:grid-cols-[1fr_auto]"
+        {/* Prompt chips */}
+        <div
+          className="flex flex-wrap justify-center gap-2 px-1.5 pt-5"
+          aria-label="Prompt examples"
+        >
+          {promptChips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              onClick={() => onChipClick(chip)}
+              className="rounded-full border border-[var(--bookish-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--bookish-ink)] shadow-sm transition hover:border-[var(--bookish-accent)] hover:text-[var(--bookish-accent)]"
             >
-              <div>
-                <strong className="block text-sm tracking-[-0.025em] text-[var(--bookish-ink)]">
-                  Open your workspace
-                </strong>
-                <span className="mt-0.5 block text-[13px] text-[var(--bookish-muted)]">
-                  Continue drafting, reviewing chapters, and managing agent memory.
-                </span>
-              </div>
-              <span className="border-b border-current text-[13px] font-[720] text-[var(--bookish-accent)]">
-                Open
-              </span>
+              {chip}
+            </button>
+          ))}
+        </div>
+
+        {/* Browse public books — logged-out only */}
+        {!isAuthenticated && (
+          <div className="bookish-fade mt-8">
+            <Link
+              href="/explore"
+              className="inline-flex items-center gap-2 text-[var(--bookish-accent)] hover:text-[var(--bookish-accent-hover)] transition-colors border-b border-[color:var(--bookish-accent)]/30 hover:border-[color:var(--bookish-accent)] pb-0.5 text-sm font-medium uppercase tracking-widest"
+            >
+              Browse the Grand Library <span aria-hidden>→</span>
             </Link>
           </div>
         )}
-
-        <div className="bookish-fade mt-8">
-          <Link
-            href="/explore"
-            className="inline-flex items-center gap-1.5 text-[13px] font-[720] text-[var(--bookish-accent)] hover:underline"
-          >
-            Browse public books
-            <span aria-hidden>→</span>
-          </Link>
-        </div>
       </div>
     </section>
   );

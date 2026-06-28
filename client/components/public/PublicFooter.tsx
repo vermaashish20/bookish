@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Feather, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthProvider';
 
 export function PublicFooter() {
@@ -8,44 +9,64 @@ export function PublicFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-auto border-t border-[var(--bookish-line)] bg-[color-mix(in_srgb,var(--bookish-paper)_40%,transparent)]">
-      <div className="bookish-wrap py-12">
-        <div className="grid gap-10 sm:grid-cols-[1.4fr_1fr_1fr]">
-          <div>
+    <footer className="pt-20 pb-10 border-t border-black/5 bg-[#FAFAFA]">
+      <div className="bookish-wrap">
+        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_1fr] gap-12 mb-16">
+
+          {/* Brand & newsletter */}
+          <div className="flex flex-col">
             <Link
               href="/"
-              className="inline-flex items-center gap-[11px] font-[760] tracking-[-0.04em] text-[var(--bookish-ink)]"
+              className="inline-flex items-center gap-2 font-medium text-2xl tracking-tight text-[var(--bookish-ink)] bookish-display mb-5"
             >
-              <span
-                className="grid h-[30px] w-[30px] place-items-center rounded-[10px] border border-[rgb(22_23_19/0.12)] bg-[var(--bookish-paper)] text-[var(--bookish-accent)] shadow-[inset_0_-8px_18px_rgb(35_92_69/0.08)]"
-                aria-hidden
-              >
-                B
-              </span>
-              <span>Bookish</span>
+              <Feather className="h-5 w-5 text-[var(--bookish-accent)]" />
+              Bookish
             </Link>
-            <p className="mt-4 max-w-[32ch] text-[13px] leading-[1.6] text-[var(--bookish-muted)]">
-              Write with agents. Read what others publish.
+            <p className="text-[var(--bookish-muted)] text-base leading-relaxed max-w-[34ch] mb-8">
+              A magical workspace where your ideas become legendary manuscripts.
             </p>
+
+            <div className="mt-auto">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--bookish-ink)] mb-3">
+                Join the Guild
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  className="flex-1 min-w-0 rounded-full border border-[var(--bookish-line)] bg-[color-mix(in_srgb,var(--bookish-paper)_90%,transparent)] px-4 py-2.5 text-sm outline-none focus:border-[var(--bookish-accent)] transition-colors text-[var(--bookish-ink)] placeholder:text-[var(--bookish-muted)]"
+                />
+                <button
+                  type="button"
+                  className="bookish-cta px-4 py-2.5 flex items-center justify-center"
+                  aria-label="Subscribe"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
+          {/* Product links */}
           <div>
-            <p className="text-[12px] font-[720] text-[var(--bookish-ink)]">Product</p>
-            <ul className="mt-3 space-y-2 text-[13px] text-[var(--bookish-muted)]">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--bookish-ink)] mb-5">
+              Product
+            </p>
+            <ul className="flex flex-col gap-3 text-[15px] text-[var(--bookish-muted)]">
               <li>
-                <Link href="/" className="transition hover:text-[var(--bookish-ink)]">
+                <Link href="/" className="transition hover:text-[var(--bookish-accent)]">
                   Home
                 </Link>
               </li>
               <li>
-                <Link href="/explore" className="transition hover:text-[var(--bookish-ink)]">
+                <Link href="/explore" className="transition hover:text-[var(--bookish-accent)]">
                   Explore books
                 </Link>
               </li>
               <li>
                 <Link
                   href={isAuthenticated ? '/workspace' : '/login'}
-                  className="transition hover:text-[var(--bookish-ink)]"
+                  className="transition hover:text-[var(--bookish-accent)]"
                 >
                   {isAuthenticated ? 'Workspace' : 'Start writing'}
                 </Link>
@@ -53,24 +74,27 @@ export function PublicFooter() {
             </ul>
           </div>
 
+          {/* Account links */}
           <div>
-            <p className="text-[12px] font-[720] text-[var(--bookish-ink)]">Account</p>
-            <ul className="mt-3 space-y-2 text-[13px] text-[var(--bookish-muted)]">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--bookish-ink)] mb-5">
+              Account
+            </p>
+            <ul className="flex flex-col gap-3 text-[15px] text-[var(--bookish-muted)]">
               {isAuthenticated ? (
                 <li>
-                  <Link href="/workspace" className="transition hover:text-[var(--bookish-ink)]">
+                  <Link href="/workspace" className="transition hover:text-[var(--bookish-accent)]">
                     Your projects
                   </Link>
                 </li>
               ) : (
                 <li>
-                  <Link href="/login" className="transition hover:text-[var(--bookish-ink)]">
+                  <Link href="/login" className="transition hover:text-[var(--bookish-accent)]">
                     Sign in
                   </Link>
                 </li>
               )}
               <li>
-                <Link href="/explore" className="transition hover:text-[var(--bookish-ink)]">
+                <Link href="/explore" className="transition hover:text-[var(--bookish-accent)]">
                   Public shelf
                 </Link>
               </li>
@@ -78,9 +102,17 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col justify-between gap-3 border-t border-[var(--bookish-line)] pt-6 text-[12px] text-[var(--bookish-muted)] sm:flex-row sm:items-center">
-          <span>© {year} Bookish</span>
-          <span>A quiet place to make books with AI.</span>
+        {/* Bottom bar */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-[var(--bookish-line)] text-xs text-[var(--bookish-muted)]">
+          <p>&copy; {year} Bookish AI. All rights reserved.</p>
+          <div className="flex gap-6 font-medium">
+            <Link href="#" className="transition hover:text-[var(--bookish-ink)]">
+              Privacy Policy
+            </Link>
+            <Link href="#" className="transition hover:text-[var(--bookish-ink)]">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
