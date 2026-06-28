@@ -14,7 +14,6 @@ export interface CreateProjectPayload {
   subtitle?: string;
   genre?: string;
   brief: string;
-  run_agents: boolean;
 }
 
 export interface AssetPayload {
@@ -32,7 +31,3 @@ export interface SettingsResponse {
   settings?: ProjectSettings;
 }
 
-export interface ResumePayload {
-  run_id: string;
-  response: string;
-}

@@ -3,22 +3,21 @@
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { uploadAsset, uploadAssetFile } from '@/lib/api';
-import type { Asset, PreviewItem, WorkspaceTab } from '@/lib/types';
+import type { Asset, MemorySubTab, PreviewItem, WorkspaceTab } from '@/lib/types';
 import AddAssetModal from '@/components/workspace/AddAssetModal';
 import AgentTab from '@/features/workspace/tabs/AgentTab';
 import BookTab from '@/features/workspace/tabs/BookTab';
 import MemoryTab from '@/features/workspace/tabs/MemoryTab';
 import SettingsTab from '@/features/workspace/tabs/SettingsTab';
-import { useChatStream } from '@/features/workspace/hooks/useChatStream';
+import { useAgentStream } from '@/features/workspace/hooks/useAgentStream';
 import { useModelSettings } from '@/features/workspace/hooks/useModelSettings';
 import { useProject } from '@/features/workspace/hooks/useProject';
 
-type MemorySubTab = 'User' | 'AgentMemory' | 'Timeline';
-
 export function WorkspaceView({ projectId }: { projectId: string }) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('Agent');
-  const [memorySubTab, setMemorySubTab] = useState<MemorySubTab>('User');
+  const [memorySubTab, setMemorySubTab] = useState<MemorySubTab>('Sources');
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<PreviewItem | null>(null);
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(true);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetContent, setNewAssetContent] = useState('');
@@ -40,7 +39,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
   } =
     useProject(projectId);
 
-  const chat = useChatStream(book, chatMessages, setChatMessages, setBook, activeChatSessionId);
+  const chat = useAgentStream(book, chatMessages, setChatMessages, setBook, activeChatSessionId);
 
   const settings = useModelSettings(projectId, book, updateBook, activeTab === 'Settings');
 
@@ -116,39 +115,37 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
     setIsAddAssetOpen(false);
   };
 
-  const triggerDownload = (format: 'pdf' | 'docx') => {
-    const element = document.createElement('a');
-    const file = new Blob([JSON.stringify(book, null, 2)], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${book.title.replace(/\s+/g, '_')}_compiled.${format}`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-zinc-50 font-sans text-zinc-900 antialiased selection:bg-zinc-200">
-      <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-6 shrink-0 shadow-xs">
-        <div className="flex items-center gap-3 text-xs">
-          <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition font-medium">
-            Dashboard
-          </Link>
-          <span className="text-zinc-300 font-light select-none">/</span>
-          <span className="font-semibold text-zinc-900 tracking-tight">{book.title}</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => triggerDownload('pdf')}
-          className="rounded border border-zinc-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-50 shadow-xs"
-        >
-          Export as PDF
-        </button>
-      </header>
+    <div className="flex h-screen bg-white font-sans text-zinc-900 antialiased selection:bg-zinc-200">
+      <WorkspaceSidebar
+        activeChatSessionId={activeChatSessionId ?? ''}
+        activeTab={activeTab}
+        chatSessions={chatSessions}
+        isHistoryPanelOpen={isHistoryPanelOpen}
+        onNewChatSession={() => {
+          setActiveTab('Agent');
+          startNewChatSession();
+        }}
+        onSwitchChatSession={(sessionId) => {
+          setActiveTab('Agent');
+          switchChatSession(sessionId);
+        }}
+        onTabChange={setActiveTab}
+        setIsHistoryPanelOpen={setIsHistoryPanelOpen}
+      />
 
-      <div className="flex flex-1 overflow-hidden">
-        <WorkspaceSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-10 shrink-0 items-center border-b border-zinc-300 bg-white px-5">
+          <nav className="flex items-center gap-2 text-[11px]">
+            <Link href="/" className="font-medium text-zinc-950 transition hover:text-black">
+              Dashboard
+            </Link>
+            <span className="select-none text-zinc-500">/</span>
+            <span className="font-semibold tracking-tight text-zinc-900">{book.title}</span>
+          </nav>
+        </header>
 
-        <main className="flex-1 flex overflow-hidden">
+        <main className="flex min-h-0 flex-1 overflow-hidden">
           {activeTab === 'Agent' && (
             <AgentTab
               book={book}
@@ -161,8 +158,9 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               pendingConfirmation={chat.pendingConfirmation}
               onResume={chat.resume}
               streamedDocumentText={chat.streamedDocumentText}
+              streamedArtifactType={chat.streamedArtifactType}
               chatSessions={chatSessions}
-              activeChatSessionId={activeChatSessionId}
+              activeChatSessionId={activeChatSessionId ?? ''}
               onSwitchChatSession={switchChatSession}
               onNewChatSession={startNewChatSession}
               onClearChatSession={clearActiveChatSession}
@@ -191,22 +189,6 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               setWriterProvider={settings.setWriterProvider}
               writerModel={settings.writerModel}
               setWriterModel={settings.setWriterModel}
-              checkerProvider={settings.checkerProvider}
-              setCheckerProvider={settings.setCheckerProvider}
-              checkerModel={settings.checkerModel}
-              setCheckerModel={settings.setCheckerModel}
-              researcherProvider={settings.researcherProvider}
-              setResearcherProvider={settings.setResearcherProvider}
-              researcherModel={settings.researcherModel}
-              setResearcherModel={settings.setResearcherModel}
-              humanizerProvider={settings.humanizerProvider}
-              setHumanizerProvider={settings.setHumanizerProvider}
-              humanizerModel={settings.humanizerModel}
-              setHumanizerModel={settings.setHumanizerModel}
-              editorProvider={settings.editorProvider}
-              setEditorProvider={settings.setEditorProvider}
-              editorModel={settings.editorModel}
-              setEditorModel={settings.setEditorModel}
               worldBuilderProvider={settings.worldBuilderProvider}
               setWorldBuilderProvider={settings.setWorldBuilderProvider}
               worldBuilderModel={settings.worldBuilderModel}
@@ -254,11 +236,23 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
 }
 
 function WorkspaceSidebar({
+  activeChatSessionId,
   activeTab,
+  chatSessions,
+  isHistoryPanelOpen,
+  onNewChatSession,
+  onSwitchChatSession,
   onTabChange,
+  setIsHistoryPanelOpen,
 }: {
+  activeChatSessionId: string;
   activeTab: WorkspaceTab;
+  chatSessions: { id: string; title: string; messageCount?: number }[];
+  isHistoryPanelOpen: boolean;
+  onNewChatSession: () => void;
+  onSwitchChatSession: (sessionId: string) => void;
   onTabChange: (tab: WorkspaceTab) => void;
+  setIsHistoryPanelOpen: (open: boolean) => void;
 }) {
   const tabs: { id: WorkspaceTab; label: string; title: string; icon: React.ReactNode }[] = [
     {
@@ -288,7 +282,7 @@ function WorkspaceSidebar({
     {
       id: 'Memory',
       label: 'Memory',
-      title: 'Assets & bible',
+      title: 'Sources & canon',
       icon: (
         <path
           strokeLinecap="round"
@@ -315,17 +309,41 @@ function WorkspaceSidebar({
   ];
 
   return (
-    <aside className="w-16 flex flex-col items-center border-r border-zinc-200 bg-white py-6 shrink-0 gap-6">
-      {tabs.map((tab) => (
+    <aside
+      className={`flex h-screen shrink-0 flex-col border-r border-zinc-300 bg-white transition-[width] duration-200 ${
+        isHistoryPanelOpen ? 'w-52' : 'w-16'
+      }`}
+    >
+      <div className={`flex h-12 items-center ${isHistoryPanelOpen ? 'justify-between px-4' : 'justify-center'}`}>
+        {isHistoryPanelOpen && (
+          <span className="text-xs font-semibold tracking-tight text-zinc-900">Bookish</span>
+        )}
         <button
-          key={tab.id}
           type="button"
-          onClick={() => onTabChange(tab.id)}
-          title={tab.title}
-          className={`flex flex-col items-center gap-1 p-2 w-12 rounded-lg transition-all ${
-            activeTab === tab.id
-              ? 'bg-zinc-100 text-zinc-900 font-medium'
-              : 'text-zinc-400 hover:text-zinc-600'
+          onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
+          className="flex size-9 items-center justify-center rounded-lg text-black transition hover:bg-zinc-100"
+          title={isHistoryPanelOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.8}
+            stroke="currentColor"
+            className="size-4"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-1 px-2">
+        <button
+          type="button"
+          onClick={onNewChatSession}
+          title="New chat"
+          className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 ${
+            isHistoryPanelOpen ? 'justify-start' : 'justify-center px-0'
           }`}
         >
           <svg
@@ -334,13 +352,66 @@ function WorkspaceSidebar({
             viewBox="0 0 24 24"
             strokeWidth={1.8}
             stroke="currentColor"
-            className="w-4 h-4"
+            className="size-4 shrink-0"
           >
-            {tab.icon}
+            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125 16.875 4.5" />
           </svg>
-          <span className="text-[9px]">{tab.label}</span>
+          {isHistoryPanelOpen && <span>New chat</span>}
         </button>
-      ))}
+
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onTabChange(tab.id)}
+            title={tab.title}
+            className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition ${
+              activeTab === tab.id
+                ? 'bg-zinc-100 font-medium text-zinc-950'
+                : 'text-zinc-950 hover:bg-zinc-50'
+            } ${isHistoryPanelOpen ? 'justify-start' : 'justify-center px-0'}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.8}
+              stroke="currentColor"
+              className="size-4 shrink-0"
+            >
+              {tab.icon}
+            </svg>
+            {isHistoryPanelOpen && <span>{tab.label}</span>}
+          </button>
+        ))}
+      </div>
+
+      {isHistoryPanelOpen && (
+        <div className="mt-5 min-h-0 flex-1 overflow-hidden px-3">
+          <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-black">
+            History
+          </div>
+          <div className="h-full space-y-1 overflow-y-auto pb-6">
+            {chatSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                onClick={() => onSwitchChatSession(session.id)}
+                className={`w-full truncate rounded-xl px-3 py-2 text-left text-xs transition ${
+                  session.id === activeChatSessionId
+                    ? 'bg-zinc-100 font-semibold text-zinc-950'
+                    : 'text-zinc-950 hover:bg-zinc-50'
+                }`}
+                title={session.title || 'Chat'}
+              >
+                {session.title || 'Chat'}{' '}
+                <span className="font-normal text-black">({session.messageCount ?? 0})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

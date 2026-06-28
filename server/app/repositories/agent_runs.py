@@ -6,19 +6,13 @@ from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from datetime import datetime
 from app.infrastructure.database.mongo import get_db
-from app.agents.streaming import publish_timeline_snapshot
-
-
-def _project_id_for_run(run_id: str) -> Optional[str]:
-    run = get_db().agent_runs.find_one({"_id": run_id}, {"projectId": 1})
-    return run.get("projectId") if run else None
 
 
 def create_agent_run(
     project_id: str,
     user_message_id: str,
     user_prompt: str,
-    session_id: Optional[str] = None,
+    thread_id: str,
 ) -> str:
     """Create a new agent run record"""
     db = get_db()
@@ -27,7 +21,7 @@ def create_agent_run(
     db.agent_runs.insert_one({
         "_id": run_id,
         "projectId": project_id,
-        "sessionId": session_id or "default",
+        "threadId": thread_id,
         "userMessageId": user_message_id,
         "userPrompt": user_prompt,
         "plannerDecision": None,
@@ -51,9 +45,6 @@ def update_agent_run_planner_decision(
         {"_id": run_id},
         {"$set": {"plannerDecision": planner_decision}}
     )
-    project_id = _project_id_for_run(run_id)
-    if project_id:
-        publish_timeline_snapshot(project_id)
 
 
 def add_agent_execution(
@@ -79,10 +70,7 @@ def add_agent_execution(
         {"$push": {"agentExecutions": execution}}
     )
     
-    # Get the index of the newly added execution
     run = db.agent_runs.find_one({"_id": run_id})
-    if run:
-        publish_timeline_snapshot(run["projectId"])
     return len(run["agentExecutions"]) - 1
 
 
@@ -112,9 +100,6 @@ def update_agent_execution(
             {"_id": run_id},
             {"$set": update_fields}
         )
-        project_id = _project_id_for_run(run_id)
-        if project_id:
-            publish_timeline_snapshot(project_id)
 
 
 def fail_agent_run(run_id: str, error: Optional[str] = None) -> None:
@@ -127,9 +112,6 @@ def fail_agent_run(run_id: str, error: Optional[str] = None) -> None:
     if error:
         update["error"] = error
     db.agent_runs.update_one({"_id": run_id}, {"$set": update})
-    project_id = _project_id_for_run(run_id)
-    if project_id:
-        publish_timeline_snapshot(project_id)
 
 
 def complete_agent_run(
@@ -149,9 +131,6 @@ def complete_agent_run(
             }
         }
     )
-    project_id = _project_id_for_run(run_id)
-    if project_id:
-        publish_timeline_snapshot(project_id)
 
 
 def get_agent_run(run_id: str) -> Optional[Dict[str, Any]]:

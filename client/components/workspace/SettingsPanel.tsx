@@ -13,22 +13,6 @@ interface SettingsPanelProps {
   setWriterProvider: (value: ProviderType) => void;
   writerModel: string;
   setWriterModel: (value: string) => void;
-  checkerProvider: ProviderType;
-  setCheckerProvider: (value: ProviderType) => void;
-  checkerModel: string;
-  setCheckerModel: (value: string) => void;
-  researcherProvider: ProviderType;
-  setResearcherProvider: (value: ProviderType) => void;
-  researcherModel: string;
-  setResearcherModel: (value: string) => void;
-  humanizerProvider: ProviderType;
-  setHumanizerProvider: (value: ProviderType) => void;
-  humanizerModel: string;
-  setHumanizerModel: (value: string) => void;
-  editorProvider: ProviderType;
-  setEditorProvider: (value: ProviderType) => void;
-  editorModel: string;
-  setEditorModel: (value: string) => void;
   worldBuilderProvider: ProviderType;
   setWorldBuilderProvider: (value: ProviderType) => void;
   worldBuilderModel: string;
@@ -62,14 +46,12 @@ export default function SettingsPanel(props: SettingsPanelProps) {
       <div className="w-full max-w-2xl space-y-6 font-sans">
         <div>
           <h2 className="text-sm font-bold text-zinc-950 uppercase tracking-wide">Model Routing Settings</h2>
-          <p className="text-[10px] text-zinc-500 mt-1">Configure orchestration providers, parameters, and credentials for active planner and writer agents.</p>
+          <p className="text-[10px] text-zinc-500 mt-1">Configure orchestration providers and credentials for planner, writer, and world builder agents.</p>
         </div>
 
-        {/* Agent selectors card */}
         <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-5">
           <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">LLM Router Assignments</h3>
 
-          {/* Planner Agent */}
           <div className="grid gap-4 sm:grid-cols-3 items-start">
             <div>
               <span className="text-xs font-semibold text-zinc-700">Planner Agent Node</span>
@@ -77,7 +59,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             </div>
             <select
               value={props.plannerProvider}
-              onChange={(e) => props.setPlannerProvider(e.target.value as any)}
+              onChange={(e) => props.setPlannerProvider(e.target.value as ProviderType)}
               className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
             >
               <option value="Claude">Anthropic Claude</option>
@@ -98,44 +80,14 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             />
           </div>
 
-          {/* Researcher Agent */}
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Researcher Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R/W | MongoDB: R | LLM: ✓</p>
-            </div>
-            <select
-              value={props.researcherProvider}
-              onChange={(e) => props.setResearcherProvider(e.target.value as any)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.researcherModel}
-              onChange={(e) => props.setResearcherModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          {/* Writer Agent */}
           <div className="grid gap-4 sm:grid-cols-3 items-start">
             <div>
               <span className="text-xs font-semibold text-zinc-700">Writer Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
+              <p className="text-[9px] text-zinc-400 mt-0.5">Drafts, revisions, polish | VectorDB: R/W | MongoDB: R/W</p>
             </div>
             <select
               value={props.writerProvider}
-              onChange={(e) => props.setWriterProvider(e.target.value as any)}
+              onChange={(e) => props.setWriterProvider(e.target.value as ProviderType)}
               className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
             >
               <option value="Claude">Anthropic Claude</option>
@@ -156,102 +108,14 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             />
           </div>
 
-          {/* Fact-Checker Agent */}
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Fact-Checker Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R/W | MongoDB: R | LLM: ✓</p>
-            </div>
-            <select
-              value={props.checkerProvider}
-              onChange={(e) => props.setCheckerProvider(e.target.value as any)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.checkerModel}
-              onChange={(e) => props.setCheckerModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          {/* Humanizer Agent */}
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Humanizer Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R | LLM: ✓</p>
-            </div>
-            <select
-              value={props.humanizerProvider}
-              onChange={(e) => props.setHumanizerProvider(e.target.value as any)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.humanizerModel}
-              onChange={(e) => props.setHumanizerModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          {/* Editor Agent */}
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Editor Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
-            </div>
-            <select
-              value={props.editorProvider}
-              onChange={(e) => props.setEditorProvider(e.target.value as any)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.editorModel}
-              onChange={(e) => props.setEditorModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          {/* World Builder Agent */}
           <div className="grid gap-4 sm:grid-cols-3 items-start">
             <div>
               <span className="text-xs font-semibold text-zinc-700">World Builder Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: W | MongoDB: R/W | LLM: ✓</p>
+              <p className="text-[9px] text-zinc-400 mt-0.5">Lore and canon | VectorDB: W | MongoDB: R/W</p>
             </div>
             <select
               value={props.worldBuilderProvider}
-              onChange={(e) => props.setWorldBuilderProvider(e.target.value as any)}
+              onChange={(e) => props.setWorldBuilderProvider(e.target.value as ProviderType)}
               className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
             >
               <option value="Claude">Anthropic Claude</option>
@@ -279,7 +143,6 @@ export default function SettingsPanel(props: SettingsPanelProps) {
           </div>
         </div>
 
-        {/* API Credentials card */}
         <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-4">
           <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">Credentials & Connection Endpoints</h3>
 

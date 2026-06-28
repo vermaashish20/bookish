@@ -16,15 +16,19 @@ from app.repositories.projects import (
     get_all_projects,
     get_book_summary,
     get_project,
+    get_project_settings,
     get_project_summary,
     get_unified_project_payload,
     update_book_summary,
+    update_project_settings,
 )
-from app.repositories.settings import get_project_settings, update_project_settings
 from app.repositories.chat_messages import (
     add_chat_message,
+    clear_chat_thread,
+    create_chat_thread,
     get_project_chat_messages,
     get_recent_chat_messages,
+    list_chat_threads,
 )
 from app.repositories.agent_runs import (
     add_agent_execution,
@@ -71,8 +75,11 @@ __all__ = [
     "get_project_settings",
     "update_project_settings",
     "add_chat_message",
+    "clear_chat_thread",
+    "create_chat_thread",
     "get_project_chat_messages",
     "get_recent_chat_messages",
+    "list_chat_threads",
     "add_agent_execution",
     "complete_agent_run",
     "create_agent_run",

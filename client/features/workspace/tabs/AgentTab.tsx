@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookProject,
   ChatMessage,
@@ -9,14 +9,20 @@ import {
   DecisionItem,
   GeneratedArtifact,
 } from '@/lib/types';
-import ChatInterface from '@/components/workspace/ChatInterface';
-import AgentFlowTrace from '@/components/workspace/AgentFlowTrace';
-import PreviewCanvas from '@/components/workspace/PreviewCanvas';
 
 const isDisplayReadyChapter = (chapter: ChapterItem) =>
-  chapter.status === 'completed' || chapter.status === 'published';
-
-const WRITING_ARTIFACT_TYPES = new Set(['draft', 'edited_content', 'humanized_content']);
+  Boolean((chapter.content ?? '').trim()) ||
+  chapter.status === 'draft' ||
+  chapter.status === 'completed' ||
+  chapter.status === 'published';
+import type { LangGraphTask } from '@/lib/types/langgraph';
+import AgentAssistant from '@/components/workspace/AgentAssistant';
+import PreviewCanvas from '@/components/workspace/PreviewCanvas';
+import { fetchArtifact } from '@/lib/api';
+import {
+  isPreviewableArtifactContent,
+  WRITING_ARTIFACT_TYPES,
+} from '@/lib/agent/display';
 
 function formatAgentName(agentName: string) {
   return agentName
@@ -49,9 +55,10 @@ interface AgentTabProps {
   promptInput: string;
   setPromptInput: (value: string) => void;
   onSendPrompt: (e: React.FormEvent) => void;
-  pendingConfirmation: { text: string, run_id: string } | null;
+  pendingConfirmation: { text: string, run_id: string, summary?: string, tasks?: LangGraphTask[] } | null;
   onResume: (decision: string) => void;
   streamedDocumentText?: string;
+  streamedArtifactType?: string;
   chatSessions: ChatSession[];
   activeChatSessionId: string;
   onSwitchChatSession: (sessionId: string) => void;
@@ -70,57 +77,66 @@ export default function AgentTab({
   pendingConfirmation,
   onResume,
   streamedDocumentText,
+  streamedArtifactType,
   chatSessions,
   activeChatSessionId,
   onSwitchChatSession,
   onNewChatSession,
   onClearChatSession,
 }: AgentTabProps) {
-  const [studioTab, setStudioTab] = useState<'Flow' | 'Preview'>('Flow');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [selectedPreviewPage, setSelectedPreviewPage] = useState(1);
-  const [activePreviewArtifact, setActivePreviewArtifact] = useState<DecisionItem | null>(null);
+  const [hydratedArtifact, setHydratedArtifact] = useState<GeneratedArtifact | null>(null);
   const artifacts = book.artifacts ?? [];
   const artifactItems = artifacts.map(artifactToDecisionItem);
-  const artifactIds = new Set(artifactItems.map((artifact) => artifact.artifactId));
-  const flowItems = [
-    ...artifactItems,
-    ...book.memory.decisionLog.filter((log) => !log.artifactId || !artifactIds.has(log.artifactId)),
-  ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  // Auto-switch to Preview Canvas when generation starts or completes
-  useEffect(() => {
-    if (streamedDocumentText) {
-      setActivePreviewArtifact(null);
-      setSelectedPreviewPage(1);
-      setStudioTab('Preview');
-    } else if (isAgentThinking) {
-      setStudioTab('Flow');
-    } else if (book.chapters?.some(isDisplayReadyChapter) || artifacts.length > 0) {
-      setStudioTab('Preview');
-    }
-  }, [isAgentThinking, book.chapters, artifacts.length, streamedDocumentText]);
-
-  useEffect(() => {
-    if (!isAgentThinking) return;
-    setActivePreviewArtifact(null);
-    setSelectedPreviewPage(1);
-  }, [isAgentThinking]);
-
   const previewChapter = book.chapters.find(isDisplayReadyChapter) || book.chapters[0];
   const latestArtifact =
     artifactItems
+      .filter((item) => WRITING_ARTIFACT_TYPES.has(item.artifactType ?? ''))
+      .filter((item) => isPreviewableArtifactContent(item.artifactContent ?? '', item.artifactType))
       .slice()
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       .at(-1) ?? null;
-  const activePreview = activePreviewArtifact ?? (!streamedDocumentText ? latestArtifact : null);
+  const activePreview = !streamedDocumentText ? latestArtifact : null;
+  const activePreviewArtifact =
+    activePreview && hydratedArtifact && hydratedArtifact.id === activePreview.artifactId
+      ? { ...activePreview, artifactContent: hydratedArtifact.content ?? activePreview.artifactContent }
+      : activePreview;
   const previewChapterForCanvas =
-    activePreview && !WRITING_ARTIFACT_TYPES.has(activePreview.artifactType ?? '')
+    activePreviewArtifact && !WRITING_ARTIFACT_TYPES.has(activePreviewArtifact.artifactType ?? '')
       ? undefined
       : previewChapter;
+  const hasPreview = Boolean(
+    (streamedDocumentText &&
+      isPreviewableArtifactContent(
+        streamedDocumentText,
+        streamedArtifactType ?? 'draft',
+      )) ||
+      activePreview ||
+      previewChapterForCanvas,
+  );
+
+  useEffect(() => {
+    if (!isPreviewOpen || !activePreview?.artifactId) return;
+    if (hydratedArtifact?.id === activePreview.artifactId || activePreview.artifactContent) return;
+
+    let cancelled = false;
+    fetchArtifact(book.id, activePreview.artifactId)
+      .then((artifact) => {
+        if (!cancelled) setHydratedArtifact(artifact);
+      })
+      .catch(() => {
+        if (!cancelled) setHydratedArtifact(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePreview, book.id, hydratedArtifact, isPreviewOpen]);
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-zinc-100">
-      <ChatInterface
+    <div className="relative flex flex-1 overflow-hidden bg-zinc-100">
+      <AgentAssistant
         chatMessages={chatMessages}
         isAgentThinking={isAgentThinking}
         currentAgentStatus={currentAgentStatus}
@@ -129,6 +145,8 @@ export default function AgentTab({
         onSendPrompt={onSendPrompt}
         pendingConfirmation={pendingConfirmation}
         onResume={onResume}
+        hasPreviewContent={Boolean(streamedDocumentText?.trim())}
+        onViewPreview={() => setIsPreviewOpen(true)}
         chatSessions={chatSessions}
         activeChatSessionId={activeChatSessionId}
         onSwitchChatSession={onSwitchChatSession}
@@ -136,55 +154,43 @@ export default function AgentTab({
         onClearChatSession={onClearChatSession}
       />
 
-      {/* Right Column (60%) - Dynamic Studio Viewer (Flow & Preview tabs) */}
-      <div className="w-[60%] flex flex-col bg-zinc-100 overflow-hidden shrink-0">
-        <div className="h-12 border-b border-zinc-200 bg-white px-6 flex items-center justify-between shrink-0 select-none">
-          <div className="flex gap-4 text-xs font-semibold text-zinc-400">
+      <button
+        type="button"
+        onClick={() => setIsPreviewOpen((open) => !open)}
+        disabled={!hasPreview}
+        className="absolute right-5 bottom-5 z-20 rounded-full bg-zinc-950 px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {isPreviewOpen ? 'Close Preview' : 'Open Preview'}
+      </button>
+
+      {isPreviewOpen && (
+        <aside className="w-[40%] min-w-[420px] shrink-0 border-l border-zinc-200 bg-white shadow-[-16px_0_40px_-28px_rgba(0,0,0,0.35)]">
+          <div className="flex h-12 items-center justify-between border-b border-zinc-200 px-5">
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-950">Preview Canvas</h2>
+              <p className="text-[10px] text-zinc-400">Latest draft or generated artifact</p>
+            </div>
             <button
-              onClick={() => setStudioTab('Flow')}
-              className={`pb-3.5 pt-3.5 border-b-2 transition focus:outline-none cursor-pointer ${
-                studioTab === 'Flow' ? 'border-zinc-900 text-zinc-900 font-semibold' : 'border-transparent hover:text-zinc-600'
-              }`}
+              type="button"
+              onClick={() => setIsPreviewOpen(false)}
+              className="rounded-full border border-zinc-200 px-3 py-1.5 text-[11px] font-semibold text-zinc-600 transition hover:bg-zinc-50"
             >
-              Agent Flow
-            </button>
-            <button
-              onClick={() => setStudioTab('Preview')}
-              className={`pb-3.5 pt-3.5 border-b-2 transition focus:outline-none cursor-pointer ${
-                studioTab === 'Preview' ? 'border-zinc-900 text-zinc-900 font-semibold' : 'border-transparent hover:text-zinc-600'
-              }`}
-            >
-              Preview Canvas
+              Close
             </button>
           </div>
-        </div>
-
-        <div className={`flex-1 ${studioTab === 'Preview' ? 'overflow-hidden' : 'overflow-y-auto p-6 flex flex-col items-center'}`}>
-          {studioTab === 'Flow' && (
-            <AgentFlowTrace
-              decisionLog={flowItems}
-              isAgentThinking={isAgentThinking}
-              currentAgentStatus={currentAgentStatus}
-              onPreviewArtifact={(artifact) => {
-                setActivePreviewArtifact(artifact);
-                setStudioTab('Preview');
-                setSelectedPreviewPage(1);
-              }}
-            />
-          )}
-
-          {studioTab === 'Preview' && (
+          <div className="h-[calc(100%-3rem)] overflow-hidden">
             <PreviewCanvas
               chapter={previewChapterForCanvas}
               selectedPage={selectedPreviewPage}
               setSelectedPage={setSelectedPreviewPage}
               bookTitle={book.title}
               streamedDocumentText={streamedDocumentText}
-              activePreviewArtifact={activePreview}
+              streamedArtifactType={streamedArtifactType}
+              activePreviewArtifact={activePreviewArtifact}
             />
-          )}
-        </div>
-      </div>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

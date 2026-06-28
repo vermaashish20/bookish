@@ -4,18 +4,15 @@ from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
 from app.services.indexing import enqueue_index_entity, unindex
-from app.agents.streaming import publish_sync_event
+from app.core.streaming import publish_sync_event
 
 
 def _entity_memory_payload(entity: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": entity.get("id") or entity.get("_id"),
         "name": entity.get("name", "Unnamed Entity"),
-        "role": entity.get("type", "entity"),
-        "type": entity.get("type", "entity"),
+        "type": entity.get("type", "concept"),
         "description": entity.get("description", ""),
-        "arc": entity.get("description", ""),
-        "activeChapters": [],
         "attributes": entity.get("attributes", {}),
         "status": entity.get("status", "draft"),
     }

@@ -8,7 +8,7 @@ import type {
   SettingsResponse,
 } from '@/lib/types/api';
 import type { BookProject } from '@/lib/types';
-import type { ChatSession } from '@/lib/types/project';
+import type { ChatSession, GeneratedArtifact } from '@/lib/types/project';
 
 export const fetchProjects = () =>
   request<BookProject[]>(endpoints.projects.list);
@@ -51,23 +51,27 @@ export const uploadAssetFile = (id: string, file: File, type?: string) => {
   });
 };
 
-export const fetchProjectMessages = (id: string, sessionId?: string) =>
-  request<unknown[]>(endpoints.projects.messages(id, sessionId));
+export const fetchArtifact = (id: string, artifactId: string) =>
+  request<GeneratedArtifact>(endpoints.projects.artifact(id, artifactId));
 
-export const fetchChatSessions = (id: string) =>
-  request<ChatSession[]>(endpoints.projects.chatSessions(id));
+export const fetchProjectMessages = (id: string, threadId?: string) =>
+  request<unknown[]>(endpoints.projects.messages(id, threadId));
 
-export const createChatSession = (id: string) =>
-  request<ChatSession>(endpoints.projects.chatSessions(id), { method: 'POST' });
+export const fetchChatThreads = (id: string) =>
+  request<ChatSession[]>(endpoints.projects.chatThreads(id));
 
-export const clearChatSessionMessages = (id: string, sessionId: string) =>
-  request<{ status: string; sessionId: string; deleted: number }>(
-    endpoints.projects.clearChatSession(id, sessionId),
+export const createChatThread = (id: string) =>
+  request<ChatSession>(endpoints.projects.chatThreads(id), { method: 'POST' });
+
+export const clearChatThreadMessages = (id: string, threadId: string) =>
+  request<{ status: string; threadId: string; deleted: number }>(
+    endpoints.projects.clearChatThread(id, threadId),
     { method: 'DELETE' },
   );
 
-export const resumeAgent = (id: string, runId: string, response: string) =>
-  request<{ status: string; response: string }>(endpoints.projects.resume(id), {
-    method: 'POST',
-    body: JSON.stringify({ run_id: runId, response }),
-  });
+/** @deprecated Use fetchChatThreads */
+export const fetchChatSessions = fetchChatThreads;
+/** @deprecated Use createChatThread */
+export const createChatSession = createChatThread;
+/** @deprecated Use clearChatThreadMessages */
+export const clearChatSessionMessages = clearChatThreadMessages;

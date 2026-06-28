@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { isPreviewableArtifactContent, isToolCallPayload } from '@/lib/agent/display';
 import { ChapterItem, DecisionItem } from '@/lib/types';
 
 interface PreviewCanvasProps {
@@ -11,12 +12,17 @@ interface PreviewCanvasProps {
   setSelectedPage: (page: number) => void;
   bookTitle: string;
   streamedDocumentText?: string;
+  streamedArtifactType?: string;
   activePreviewArtifact?: DecisionItem | null;
 }
 
-export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, bookTitle, streamedDocumentText, activePreviewArtifact }: PreviewCanvasProps) {
+export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, bookTitle, streamedDocumentText, streamedArtifactType, activePreviewArtifact }: PreviewCanvasProps) {
   // Helper to strip JSON markdown and parse it into readable text
   const formatContentForPreview = (text: string) => {
+    if (!text.trim() || isToolCallPayload(text)) {
+      return '';
+    }
+
     let cleanText = text;
     // Extract text inside ```json block if exists
     const jsonMatch = text.match(/```(?:json)?\n([\s\S]*?)```/);
@@ -26,6 +32,12 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
     
     try {
       const parsed = JSON.parse(cleanText);
+      if (typeof parsed === 'object' && parsed !== null) {
+        const record = parsed as Record<string, unknown>;
+        if (record.type === 'tool_call' || typeof record.tool_call === 'string') {
+          return '';
+        }
+      }
       // Format parsed JSON to readable text
       if (Array.isArray(parsed)) {
         return parsed.map((item) => {
@@ -51,15 +63,27 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
 
   const rawContent = activePreviewArtifact?.artifactContent || streamedDocumentText || chapter?.content || '';
   const contentToDisplay = formatContentForPreview(rawContent);
+  const artifactType =
+    activePreviewArtifact?.artifactType ?? (streamedDocumentText ? (streamedArtifactType ?? 'draft') : undefined);
+  const hasRenderableContent = isPreviewableArtifactContent(contentToDisplay, artifactType) ||
+    Boolean(!activePreviewArtifact && !streamedDocumentText && chapter?.content?.trim());
 
-  const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? 'Writer' : 'Writer');
-  const shouldPaginate = ['Writer', 'Editor', 'Humanizer'].includes(currentAgent) || (!activePreviewArtifact && chapter);
+  const isChapterPreview = artifactType === 'draft' || artifactType === 'edited_content';
+  const streamAgentLabel =
+    artifactType === 'world_building' ? 'World Builder' : 'Writer';
+  const currentAgent = activePreviewArtifact?.agent || (streamedDocumentText ? streamAgentLabel : 'Writer');
+  const shouldPaginate = isChapterPreview && (currentAgent === 'Writer' || (!activePreviewArtifact && chapter));
 
   const previewChunks = shouldPaginate
-    ? (contentToDisplay.match(/[\s\S]{1,1200}/g) || [])
+    ? (contentToDisplay.match(/[\s\S]{1,2200}/g) || [])
     : [contentToDisplay];
 
   const previewPages = Array.from({ length: Math.max(previewChunks.length, 1) }, (_, idx) => idx + 1);
+  useEffect(() => {
+    if (selectedPage > previewPages.length) {
+      setSelectedPage(previewPages.length);
+    }
+  }, [previewPages.length, selectedPage, setSelectedPage]);
   const activePreviewContent = previewChunks[selectedPage - 1] || '';
 
   return (
@@ -127,7 +151,7 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
               <div className="flex justify-between items-center text-[9px] font-sans text-zinc-400 uppercase tracking-widest border-b border-zinc-100 pb-2 mb-6 shrink-0">
                 <span className="flex-1">{bookTitle}</span>
                 <span className="flex-1 text-center font-bold">
-                  {activePreviewArtifact ? activePreviewArtifact.agent : (streamedDocumentText ? 'Writer (Actively Writing)' : 'Writer')}
+                  {activePreviewArtifact ? activePreviewArtifact.agent : (streamedDocumentText ? streamAgentLabel : 'Writer')}
                 </span>
                 <span className="flex-1 text-right"></span>
               </div>
@@ -140,9 +164,20 @@ export default function PreviewCanvas({ chapter, selectedPage, setSelectedPage, 
             )}
 
             <div className={shouldPaginate ? "space-y-4" : "flex-1 px-8 py-6"}>
-              {activePreviewContent ? (
+              {hasRenderableContent && activePreviewContent ? (
                 <div className="space-y-4 w-full max-w-full overflow-hidden">
-                  {!activePreviewArtifact && chapter && <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900 mb-6">{chapter.title}</h1>}
+                  {!activePreviewArtifact && chapter && (
+                    <div className="mb-6 text-center">
+                      <h1 className="text-sm font-semibold leading-snug tracking-tight text-zinc-900">{chapter.title}</h1>
+                      <span className={`mt-2 inline-flex rounded px-2 py-0.5 font-sans text-[9px] uppercase tracking-wider ${
+                        chapter.status === 'published' || chapter.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {chapter.status || 'draft'}
+                      </span>
+                    </div>
+                  )}
                   <div className="text-justify leading-relaxed markdown-body prose prose-sm prose-zinc max-w-3xl mx-auto break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words">
                     <ReactMarkdown 
                       remarkPlugins={[remarkGfm]}

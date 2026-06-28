@@ -7,8 +7,69 @@ from app.repositories.assets import get_project_assets
 from app.repositories.chapters import get_project_chapters
 from app.repositories.characters import get_project_characters
 from app.repositories.entities import get_project_entities
-from app.repositories.agent_runs import get_project_agent_runs
 from app.repositories.artifacts import get_project_artifacts
+
+
+def _format_character_for_memory(character: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": character.get("id") or character.get("_id"),
+        "name": character.get("name", "Unnamed Character"),
+        "role": character.get("role", ""),
+        "arc": character.get("arc", ""),
+        "activeChapters": character.get("activeChapters", []),
+        "attributes": character.get("attributes", {}),
+        "status": character.get("status", "draft"),
+    }
+
+
+def _format_entity_for_memory(entity: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": entity.get("id") or entity.get("_id"),
+        "name": entity.get("name", "Unnamed Entity"),
+        "type": entity.get("type", "concept"),
+        "description": entity.get("description", ""),
+        "attributes": entity.get("attributes", {}),
+        "status": entity.get("status", "draft"),
+    }
+
+
+def build_project_memory_payload(project: Dict[str, Any], characters: List[Dict[str, Any]], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Structured memory block for the workspace Memory tab."""
+    return {
+        "projectVoice": {
+            "genre": project.get("genre", ""),
+            "tonality": project.get("tonality", "Conversational"),
+            "bookSummary": project.get("bookSummary", ""),
+            "readerProfile": project.get("readerProfile", ""),
+            "targetWordCount": project.get("targetWordCount"),
+            "forbiddenPhrases": project.get("forbiddenPhrases", []),
+        },
+        "characters": [_format_character_for_memory(c) for c in characters],
+        "worldEntities": [_format_entity_for_memory(e) for e in entities],
+    }
+
+
+DEFAULT_PROJECT_SETTINGS: Dict[str, Any] = {
+    "plannerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+    "writerModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+    "worldBuilderModel": {"provider": "Nvidia", "modelName": "mistralai/mistral-large-3-675b-instruct-2512"},
+}
+
+
+def get_project_settings(project_id: str) -> Dict[str, Any]:
+    db = get_db()
+    project = db.projects.find_one({"_id": project_id}, {"settings": 1})
+    if not project:
+        return {}
+    return project.get("settings", {})
+
+
+def update_project_settings(project_id: str, settings: Dict[str, Any]) -> None:
+    db = get_db()
+    db.projects.update_one(
+        {"_id": project_id},
+        {"$set": {"settings": settings}},
+    )
 
 
 def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
@@ -24,64 +85,7 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     characters = get_project_characters(project_id)
     entities = get_project_entities(project_id)
     assets = get_project_assets(project_id)
-    artifacts = get_project_artifacts(project_id)
-
-    tonality_key = str(p.get("tonality", "")).lower()
-    tonality_scores = {
-        "conversational": 1.0 if tonality_key == "conversational" else 0.0,
-        "academic":       1.0 if tonality_key == "academic"       else 0.0,
-        "storyteller":    1.0 if tonality_key == "storyteller"    else 0.0,
-        "motivational":   1.0 if tonality_key == "motivational"   else 0.0,
-        "witty":          1.0 if tonality_key == "witty"          else 0.0,
-    }
-
-    # Build decisionLog from agent_runs
-    agent_runs = get_project_agent_runs(project_id)
-    decision_log = []
-
-    for run in reversed(agent_runs):
-        if run.get("plannerDecision"):
-            decision_log.append({
-                "timestamp":  run.get("startedAt", ""),
-                "step":       "Planning",
-                "agent":      "Planner",
-                "action":     "Created execution plan",
-                "resolution": run["plannerDecision"].get("decision", "Task analysis complete"),
-            })
-
-        for exec_item in run.get("agentExecutions", []):
-            status = exec_item.get("status", "")
-            decision_item = {
-                "timestamp":  exec_item.get("startedAt") or run.get("startedAt", ""),
-                "step":       "Execution",
-                "agent":      exec_item.get("agent", "Agent").capitalize(),
-                "action":     (exec_item.get("taskInput", "Task") or "")[:80] + "…",
-                "resolution": f"[{status.upper()}]",
-            }
-            artifact_id = exec_item.get("outputArtifactId")
-            if artifact_id:
-                from app.repositories.artifacts import get_artifact
-                artifact = get_artifact(artifact_id)
-                if artifact:
-                    decision_item["artifactId"]      = artifact_id
-                    decision_item["artifactType"]    = artifact.get("artifactType", "")
-                    decision_item["artifactContent"] = artifact.get("content", "")
-            decision_log.append(decision_item)
-
-    entity_bible = [
-        {
-            "id": e.get("id") or e.get("_id"),
-            "name": e.get("name", "Unnamed Entity"),
-            "role": e.get("type", "entity"),
-            "type": e.get("type", "entity"),
-            "description": e.get("description", ""),
-            "arc": e.get("description", ""),
-            "activeChapters": [],
-            "attributes": e.get("attributes", {}),
-            "status": e.get("status", "draft"),
-        }
-        for e in entities
-    ]
+    artifacts = get_project_artifacts(project_id, include_content=False)
 
     has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
 
@@ -92,6 +96,8 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "genre":     p.get("genre", ""),
         "brief":     assets[0]["content"] if assets else "",
         "tonality":  p["tonality"],
+        "readerProfile": p.get("readerProfile", ""),
+        "targetWordCount": p.get("targetWordCount"),
         "status":    "Reviewing" if has_published else "Planning",
         "createdAt": p["createdAt"],
         "bookSummary": p.get("bookSummary", ""),
@@ -99,17 +105,7 @@ def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
         "assets":    assets,
         "artifacts": artifacts,
         "settings":  p.get("settings", {}),
-        "memory": {
-            "factRegistry":    [],
-            "characterBible":  characters + entity_bible,
-            "callbackIndex":   [],    # kept for frontend schema compat; always empty now
-            "tonalityFingerprint": {
-                "preset": p["tonality"],
-                **tonality_scores,
-                "forbiddenPhrases": [],
-            },
-            "decisionLog": decision_log,
-        },
+        "memory": build_project_memory_payload(p, characters, entities),
     }
 
 
@@ -124,6 +120,10 @@ def get_project_summary(project_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     asset_count = db.user_assets.count_documents({"projectId": project_id})
+    chapter_count = db.chapters.count_documents({"projectId": project_id})
+    published_chapter_count = db.chapters.count_documents(
+        {"projectId": project_id, "status": {"$in": ["published", "completed"]}}
+    )
     first_asset = db.user_assets.find_one(
         {"projectId": project_id},
         sort=[("addedAt", 1)],
@@ -157,6 +157,8 @@ def get_project_summary(project_id: str) -> Optional[Dict[str, Any]]:
         "createdAt":  p["createdAt"],
         "assets":     formatted_assets,
         "assetCount": asset_count,
+        "chapterCount": chapter_count,
+        "publishedChapterCount": published_chapter_count,
     }
 
 
@@ -167,12 +169,14 @@ def create_project(
     tonality: str,
     created_at: str,
     settings: Dict[str, Any],
+    user_id: str = "",
 ) -> str:
     db = get_db()
     project_id = f"project_{ObjectId()}"
     db.projects.insert_one({
         "_id":        project_id,
         "id":         project_id,
+        "userId":     user_id,
         "title":      title,
         "subtitle":   subtitle,
         "genre":      genre,
@@ -203,9 +207,10 @@ def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     return db.projects.find_one({"_id": project_id})
 
 
-def get_all_projects() -> List[Dict[str, Any]]:
+def get_all_projects(user_id: str = "") -> List[Dict[str, Any]]:
     db = get_db()
-    return list(db.projects.find({}).sort("createdAt", -1))
+    query: Dict[str, Any] = {"userId": user_id} if user_id else {}
+    return list(db.projects.find(query).sort("createdAt", -1))
 
 
 def get_book_summary(project_id: str) -> str:

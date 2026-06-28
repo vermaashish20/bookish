@@ -1,15 +1,15 @@
 'use client';
 
 import React from 'react';
-import { BookProject } from '@/lib/types';
+import { BookProject, MemorySubTab, PreviewItem } from '@/lib/types';
 import MemoryPanel from '@/components/workspace/MemoryPanel';
 
 interface MemoryTabProps {
   book: BookProject;
-  memorySubTab: 'User' | 'AgentMemory' | 'Timeline';
-  setMemorySubTab: (tab: 'User' | 'AgentMemory' | 'Timeline') => void;
-  selectedPreviewItem: any;
-  setSelectedPreviewItem: (item: any) => void;
+  memorySubTab: MemorySubTab;
+  setMemorySubTab: (tab: MemorySubTab) => void;
+  selectedPreviewItem: PreviewItem | null;
+  setSelectedPreviewItem: (item: PreviewItem | null) => void;
   setIsAddAssetOpen: (open: boolean) => void;
 }
 
@@ -19,7 +19,7 @@ export default function MemoryTab({
   setMemorySubTab,
   selectedPreviewItem,
   setSelectedPreviewItem,
-  setIsAddAssetOpen
+  setIsAddAssetOpen,
 }: MemoryTabProps) {
   return (
     <MemoryPanel

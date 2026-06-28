@@ -30,10 +30,6 @@ const DEFAULT_CONFIG: ModelConfig = {
 const DEFAULT_SETTINGS: ProjectSettings = {
   plannerModel: { ...DEFAULT_CONFIG },
   writerModel: { ...DEFAULT_CONFIG },
-  factCheckerModel: { ...DEFAULT_CONFIG },
-  researcherModel: { ...DEFAULT_CONFIG },
-  humanizerModel: { ...DEFAULT_CONFIG },
-  editorModel: { ...DEFAULT_CONFIG },
   worldBuilderModel: { ...DEFAULT_CONFIG },
 };
 
@@ -62,10 +58,6 @@ function normalizeSettings(settings?: Partial<ProjectSettings>): ProjectSettings
   return {
     plannerModel: normalizeModelConfig(settings?.plannerModel),
     writerModel: normalizeModelConfig(settings?.writerModel),
-    factCheckerModel: normalizeModelConfig(settings?.factCheckerModel),
-    researcherModel: normalizeModelConfig(settings?.researcherModel),
-    humanizerModel: normalizeModelConfig(settings?.humanizerModel),
-    editorModel: normalizeModelConfig(settings?.editorModel),
     worldBuilderModel: normalizeModelConfig(settings?.worldBuilderModel),
   };
 }
@@ -159,10 +151,6 @@ export function useModelSettings(
     return {
       plannerModel: withCredential(settings.plannerModel),
       writerModel: withCredential(settings.writerModel),
-      factCheckerModel: withCredential(settings.factCheckerModel),
-      researcherModel: withCredential(settings.researcherModel),
-      humanizerModel: withCredential(settings.humanizerModel),
-      editorModel: withCredential(settings.editorModel),
       worldBuilderModel: withCredential(settings.worldBuilderModel),
     };
   }, [credentials, settings]);
@@ -195,22 +183,6 @@ export function useModelSettings(
     setWriterProvider: (provider: LLMProvider) => updateModelConfig('writerModel', { provider }),
     writerModel: settings.writerModel.modelName,
     setWriterModel: (modelName: string) => updateModelConfig('writerModel', { modelName }),
-    checkerProvider: settings.factCheckerModel.provider,
-    setCheckerProvider: (provider: LLMProvider) => updateModelConfig('factCheckerModel', { provider }),
-    checkerModel: settings.factCheckerModel.modelName,
-    setCheckerModel: (modelName: string) => updateModelConfig('factCheckerModel', { modelName }),
-    researcherProvider: settings.researcherModel.provider,
-    setResearcherProvider: (provider: LLMProvider) => updateModelConfig('researcherModel', { provider }),
-    researcherModel: settings.researcherModel.modelName,
-    setResearcherModel: (modelName: string) => updateModelConfig('researcherModel', { modelName }),
-    humanizerProvider: settings.humanizerModel.provider,
-    setHumanizerProvider: (provider: LLMProvider) => updateModelConfig('humanizerModel', { provider }),
-    humanizerModel: settings.humanizerModel.modelName,
-    setHumanizerModel: (modelName: string) => updateModelConfig('humanizerModel', { modelName }),
-    editorProvider: settings.editorModel.provider,
-    setEditorProvider: (provider: LLMProvider) => updateModelConfig('editorModel', { provider }),
-    editorModel: settings.editorModel.modelName,
-    setEditorModel: (modelName: string) => updateModelConfig('editorModel', { modelName }),
     worldBuilderProvider: settings.worldBuilderModel.provider,
     setWorldBuilderProvider: (provider: LLMProvider) => updateModelConfig('worldBuilderModel', { provider }),
     worldBuilderModel: settings.worldBuilderModel.modelName,

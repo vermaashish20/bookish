@@ -19,11 +19,7 @@ class KnowledgeSearchResult(TypedDict):
     scopes: List[str]
     intent: str
     results: List[KnowledgeHit]
-    relevance: float
-    coverage: str
     missing: List[str]
-    shouldRetrieveAgain: bool
-    suggestedQuery: Optional[str]
 
 
 class RetrievalLog(TypedDict, total=False):
@@ -36,8 +32,4 @@ class RetrievalLog(TypedDict, total=False):
     query: str
     intent: str
     resultIds: List[str]
-    scores: List[float]
-    relevance: float
-    coverage: str
-    shouldRetrieveAgain: bool
     createdAt: str

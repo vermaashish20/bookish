@@ -4,7 +4,7 @@ from bson import ObjectId
 
 from app.infrastructure.database.mongo import get_db
 from app.services.indexing import enqueue_index_character
-from app.agents.streaming import publish_sync_event
+from app.core.streaming import publish_sync_event
 
 
 def add_character(project_id: str, name: str, role: str, arc: str, active_chapters: List[int], attributes: Dict[str, Any], status: str = "draft"):

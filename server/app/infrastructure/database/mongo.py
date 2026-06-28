@@ -20,7 +20,6 @@ def init_db():
         "agent_runs",
         "artifacts",
         "chat_messages",
-        "retrieval_logs",
     ):
         collection = db[collection_name]
         for index in collection.list_indexes():
@@ -35,7 +34,6 @@ def init_db():
     db.agent_runs.create_index("projectId")
     db.artifacts.create_index("projectId")
     db.chat_messages.create_index("projectId")
-    db.retrieval_logs.create_index("projectId")
 
     # Sorting / range indexes
     db.projects.create_index([("createdAt", pymongo.DESCENDING)])
@@ -43,10 +41,9 @@ def init_db():
     db.agent_runs.create_index([("projectId", pymongo.ASCENDING), ("startedAt", pymongo.DESCENDING)])
     db.artifacts.create_index([("projectId", pymongo.ASCENDING), ("createdAt", pymongo.DESCENDING)])
     db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
-    db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("sessionId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
+    db.chat_messages.create_index([("projectId", pymongo.ASCENDING), ("threadId", pymongo.ASCENDING), ("createdAt", pymongo.ASCENDING)])
+    db.agent_runs.create_index([("projectId", pymongo.ASCENDING), ("threadId", pymongo.ASCENDING), ("startedAt", pymongo.DESCENDING)])
     db.user_assets.create_index([("projectId", pymongo.ASCENDING), ("addedAt", pymongo.ASCENDING)])
-    db.retrieval_logs.create_index([("projectId", pymongo.ASCENDING), ("createdAt", pymongo.DESCENDING)])
-    db.retrieval_logs.create_index([("runId", pymongo.ASCENDING), ("agent", pymongo.ASCENDING)])
 
     # Optional full-text indexes (legacy; semantic search uses Chroma)
     db.chapters.create_index([("title", pymongo.TEXT), ("summary", pymongo.TEXT)])
