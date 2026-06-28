@@ -41,7 +41,7 @@ export default function PublicHomePage() {
     }
 
     router.push(
-      `/login?redirect=${encodeURIComponent(`/workspace?create=1&prompt=${encodeURIComponent(trimmed)}`)}`,
+      `/sign-in?redirect_url=${encodeURIComponent(`/workspace?create=1&prompt=${encodeURIComponent(trimmed)}`)}`,
     );
   };
 

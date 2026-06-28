@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.api.deps import get_current_user, require_owned_project
 from app.repositories.assets import add_user_asset
 from app.repositories.projects import (
     DEFAULT_PROJECT_SETTINGS,
@@ -30,12 +31,11 @@ router = APIRouter(
 
 
 @router.get("")
-def fetch_projects():
+def fetch_projects(user_id: str = Depends(get_current_user)):
     """
-    Fetch all projects with lightweight summaries.
-    Optimized for list view - doesn't fetch chapters, characters, logs, etc.
+    Fetch all projects for the authenticated user with lightweight summaries.
     """
-    projects = get_all_projects()
+    projects = get_all_projects(user_id)
     result = []
     for project in projects:
         summary = get_project_summary(project["_id"])
@@ -45,12 +45,9 @@ def fetch_projects():
 
 
 @router.post("")
-def register_project(payload: CreateProjectPayload):
+def register_project(payload: CreateProjectPayload, user_id: str = Depends(get_current_user)):
     """
-    Create a new book project.
-
-    Project creation only persists the project and initial brief asset. Agent
-    work starts from the workspace through the LangGraph `/api/agent` routes.
+    Create a new book project owned by the authenticated user.
     """
     created_at = datetime.utcnow().isoformat()
     settings_dict = DEFAULT_PROJECT_SETTINGS.copy()
@@ -72,6 +69,7 @@ def register_project(payload: CreateProjectPayload):
         tonality=tonality_val,
         created_at=created_at,
         settings=settings_dict,
+        user_id=user_id,
     )
     add_user_asset(
         project_id=project_id,
@@ -85,15 +83,17 @@ def register_project(payload: CreateProjectPayload):
 
 
 @router.get("/{id}")
-def fetch_project_details(id: str):
-    project = get_unified_project_payload(id)
-    if not project:
+def fetch_project_details(id: str, user_id: str = Depends(get_current_user)):
+    project = require_owned_project(id, user_id)  # noqa: F841
+    result = get_unified_project_payload(id)
+    if not result:
         raise HTTPException(status_code=404, detail="Book project not found.")
-    return project
+    return result
 
 
 @router.get("/{id}/artifacts/{artifact_id}")
-def fetch_project_artifact(id: str, artifact_id: str):
+def fetch_project_artifact(id: str, artifact_id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     artifact = get_artifact(artifact_id)
     if not artifact or artifact.get("projectId") != id:
         raise HTTPException(status_code=404, detail="Artifact not found.")
@@ -101,18 +101,14 @@ def fetch_project_artifact(id: str, artifact_id: str):
 
 
 @router.get("/{id}/settings")
-def fetch_settings(id: str):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def fetch_settings(id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     return get_project_settings(id)
 
 
 @router.post("/{id}/settings")
-def save_settings(id: str, payload: UpdateSettingsPayload):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def save_settings(id: str, payload: UpdateSettingsPayload, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     settings = payload.settings.model_dump()
     update_project_settings(id, settings)
     return {
@@ -122,19 +118,15 @@ def save_settings(id: str, payload: UpdateSettingsPayload):
 
 
 @router.delete("/{id}")
-def remove_project(id: str):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def remove_project(id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     delete_project(id)
     return {"message": f"Project {id} deleted successfully."}
 
 
 @router.post("/{id}/assets")
-async def register_asset(id: str, request: Request):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+async def register_asset(id: str, request: Request, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
 
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" in content_type:
@@ -190,26 +182,20 @@ async def register_asset(id: str, request: Request):
 
 
 @router.get("/{id}/chat-threads")
-def fetch_chat_threads(id: str):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def fetch_chat_threads(id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     return list_chat_threads(id)
 
 
 @router.post("/{id}/chat-threads")
-def register_chat_thread(id: str):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def register_chat_thread(id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     return create_chat_thread(id)
 
 
 @router.get("/{id}/messages")
-def fetch_project_messages(id: str, thread_id: str | None = None):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def fetch_project_messages(id: str, thread_id: str | None = None, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     if not thread_id:
         threads = list_chat_threads(id)
         thread_id = threads[0]["threadId"] if threads else None
@@ -219,9 +205,7 @@ def fetch_project_messages(id: str, thread_id: str | None = None):
 
 
 @router.delete("/{id}/chat-threads/{thread_id}/messages")
-def clear_chat_thread_messages(id: str, thread_id: str):
-    project = get_project(id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
+def clear_chat_thread_messages(id: str, thread_id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
     deleted = clear_chat_thread(id, thread_id)
     return {"status": "ok", "threadId": thread_id, "deleted": deleted}

@@ -169,12 +169,14 @@ def create_project(
     tonality: str,
     created_at: str,
     settings: Dict[str, Any],
+    user_id: str = "",
 ) -> str:
     db = get_db()
     project_id = f"project_{ObjectId()}"
     db.projects.insert_one({
         "_id":        project_id,
         "id":         project_id,
+        "userId":     user_id,
         "title":      title,
         "subtitle":   subtitle,
         "genre":      genre,
@@ -205,9 +207,10 @@ def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     return db.projects.find_one({"_id": project_id})
 
 
-def get_all_projects() -> List[Dict[str, Any]]:
+def get_all_projects(user_id: str = "") -> List[Dict[str, Any]]:
     db = get_db()
-    return list(db.projects.find({}).sort("createdAt", -1))
+    query: Dict[str, Any] = {"userId": user_id} if user_id else {}
+    return list(db.projects.find(query).sort("createdAt", -1))
 
 
 def get_book_summary(project_id: str) -> str:

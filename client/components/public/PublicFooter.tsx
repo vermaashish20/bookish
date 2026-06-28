@@ -88,7 +88,7 @@ export function PublicFooter() {
                 </li>
               ) : (
                 <li>
-                  <Link href="/login" className="transition hover:text-[var(--bookish-accent)]">
+                  <Link href="/sign-in" className="transition hover:text-[var(--bookish-accent)]">
                     Sign in
                   </Link>
                 </li>

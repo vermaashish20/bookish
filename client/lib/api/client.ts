@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/config/env';
+import { getAuthToken } from './auth';
 
 export class ApiError extends Error {
   constructor(
@@ -11,13 +12,16 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getAuthToken();
   const isFormData = options?.body instanceof FormData;
+
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: isFormData
-      ? options?.headers
-      : { 'Content-Type': 'application/json', ...options?.headers },
+      ? { ...authHeaders, ...options?.headers }
+      : { 'Content-Type': 'application/json', ...authHeaders, ...options?.headers },
   });
 
   if (!res.ok) {

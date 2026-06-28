@@ -14,7 +14,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     if (isLoading || isAuthenticated) return;
     const query = searchParams.toString();
     const redirect = encodeURIComponent(query ? `${pathname}?${query}` : pathname);
-    router.replace(`/login?redirect=${redirect}`);
+    router.replace(`/sign-in?redirect_url=${redirect}`);
   }, [isAuthenticated, isLoading, pathname, router, searchParams]);
 
   if (isLoading) {
