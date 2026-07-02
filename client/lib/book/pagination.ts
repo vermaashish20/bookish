@@ -7,9 +7,11 @@ export {
   MANUSCRIPT_PAGE_BODY_FIRST,
   MANUSCRIPT_PAGE_HEIGHT_PX,
   MANUSCRIPT_PAGE_WIDTH_PX,
+  formatChapterHeading,
   paginateChapterContent,
   prepareChapterForDisplay,
   stripLeadingChapterHeading,
+  stripManuscriptMarkdown,
 } from './chapterContent';
 
 /** @deprecated Use MANUSCRIPT_PAGE_BODY */

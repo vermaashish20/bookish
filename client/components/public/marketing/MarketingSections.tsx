@@ -326,57 +326,51 @@ export function LongBookSection() {
   );
 }
 
-// ─── Layout F: Centered CTA band ──────────────────────────────────────────────
+// ─── Layout F: Background image with right-aligned content box ────────────────
 export function FinalCtaSection() {
   const reduce = useReducedMotion();
 
   return (
-    <section className="pb-20 pt-4 bg-white border-t border-black/5">
-      <div className="bookish-wrap">
+    <section className="relative overflow-hidden py-20 sm:py-32 border-t border-black/5">
+      {/* Background image */}
+      <div
+        className="absolute inset-0 z-0 bg-cover bg-center"
+        style={{ backgroundImage: 'url(/cta-section.png)' }}
+      />
+
+      {/* Soft overlay to ensure background isn't too overpowering */}
+      <div className="absolute inset-0 z-0 bg-white/20 backdrop-blur-[1px]" />
+
+      <div className="bookish-wrap relative z-10 flex justify-end">
         <motion.div
-          initial={reduce ? false : { opacity: 0, y: 28 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={reduce ? false : { opacity: 0, x: 28 }}
+          whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true, amount: 0.4 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="bookish-outer-shell overflow-hidden"
+          className="w-full max-w-[540px]"
         >
-          <div className="rounded-[calc(1.5rem-8px)] overflow-hidden border border-[rgba(5,150,105,0.2)] bg-white">
-            {/* Top: image strip */}
-            <div className="relative h-[180px] w-full overflow-hidden sm:h-[220px]">
-              <Image
-                src="https://picsum.photos/seed/open-book-forest-light/1200/400"
-                alt=""
-                fill
-                className="object-cover opacity-40"
-                aria-hidden
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[color-mix(in_srgb,var(--bookish-accent)_12%,transparent)]" />
-            </div>
-
-            {/* Bottom: CTA content */}
-            <div className="px-8 pb-10 pt-8 text-center sm:px-12 sm:pb-12">
-              <h2 className="mx-auto max-w-[18ch] text-[clamp(3rem,5vw,5.5rem)] leading-[1.0] tracking-tight font-medium text-[var(--bookish-ink)]">
-                Your blank page{' '}
-                <em className="not-italic italic text-[var(--bookish-accent)]">awaits.</em>
-              </h2>
-              <p
-                className="mx-auto mt-5 max-w-[50ch] text-lg text-[var(--bookish-muted)]"
-                style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
+          <div className="rounded-3xl border border-white/60 bg-white/90 backdrop-blur-md shadow-2xl p-10 sm:p-14">
+            <h2 className="text-[clamp(2.5rem,4vw,3.5rem)] leading-[1.05] tracking-tight font-medium text-[var(--bookish-ink)] mb-5">
+              Your blank page{' '}
+              <em className="not-italic italic text-[var(--bookish-accent)]">awaits.</em>
+            </h2>
+            <p
+              className="text-[17px] font-semibold leading-[1.65] text-[var(--bookish-ink)] mb-8"
+              style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
+            >
+              Don&apos;t let your universe remain unwritten. Let the Bookish AI engine forge your
+              masterpiece today.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/login" className="bookish-cta">
+                Begin Your Saga
+              </Link>
+              <Link
+                href="/explore"
+                className="rounded-full border border-[var(--bookish-line)] bg-white/60 px-5 py-3 text-[14px] font-medium text-[var(--bookish-muted)] transition hover:text-[var(--bookish-ink)] hover:bg-white"
               >
-                Don&apos;t let your universe remain unwritten. Let the Bookish AI engine forge your
-                masterpiece today.
-              </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link href="/login" className="bookish-cta">
-                  Begin Your Saga
-                </Link>
-                <Link
-                  href="/explore"
-                  className="rounded-full border border-[var(--bookish-line)] px-5 py-3 text-[14px] font-medium text-[var(--bookish-muted)] transition hover:text-[var(--bookish-ink)]"
-                >
-                  Read public books
-                </Link>
-              </div>
+                Read public books
+              </Link>
             </div>
           </div>
         </motion.div>

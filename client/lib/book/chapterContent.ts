@@ -20,7 +20,7 @@ const MANUSCRIPT_BODY_LINES =
     MANUSCRIPT_HEADER_BAND_PX -
     8) /
   MANUSCRIPT_BODY_LINE_HEIGHT_PX;
-const MANUSCRIPT_CHAPTER_HEADER_LINES = 5;
+const MANUSCRIPT_CHAPTER_HEADER_LINES = 3;
 
 export const MANUSCRIPT_PAGE_BODY_FIRST = Math.floor(
   (MANUSCRIPT_BODY_LINES - MANUSCRIPT_CHAPTER_HEADER_LINES) * MANUSCRIPT_BODY_CHARS_PER_LINE,
@@ -74,15 +74,49 @@ export function stripLeadingChapterHeading(
   const lines = content.split('\n');
   let index = 0;
 
-  while (index < lines.length && !lines[index].trim()) index += 1;
-  if (index >= lines.length) return content.trim();
-
-  if (isChapterHeadingLine(lines[index], chapter.number, chapter.title)) {
-    index += 1;
+  while (index < lines.length) {
     while (index < lines.length && !lines[index].trim()) index += 1;
+    if (index >= lines.length) break;
+
+    const line = lines[index]!;
+    const trimmed = line.trim();
+
+    if (/^[-*_]{3,}\s*$/.test(trimmed)) {
+      index += 1;
+      continue;
+    }
+
+    if (isChapterHeadingLine(line, chapter.number, chapter.title)) {
+      index += 1;
+      continue;
+    }
+
+    if (/^#+\s*chapter\s+\d+/i.test(trimmed)) {
+      index += 1;
+      continue;
+    }
+
+    break;
   }
 
   return lines.slice(index).join('\n').trim();
+}
+
+export function formatChapterHeading(number: number, title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return `Chapter ${number}`;
+  if (new RegExp(`^chapter\\s+${number}\\b`, 'i').test(trimmed)) return trimmed;
+  return `Chapter ${number}: ${trimmed}`;
+}
+
+/** Plain-text manuscript view — drop common inline markdown without rendering. */
+export function stripManuscriptMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
 }
 
 function estimateBlockWeight(text: string): number {

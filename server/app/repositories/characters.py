@@ -12,7 +12,6 @@ def add_character(project_id: str, name: str, role: str, arc: str, active_chapte
     char_id = f"character_{ObjectId()}"
     character = {
         "_id": char_id,
-        "id": char_id,
         "projectId": project_id,
         "name": name,
         "role": role,

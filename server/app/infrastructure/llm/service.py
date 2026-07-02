@@ -87,7 +87,6 @@ class LLMService:
                         publish_stream_token(token)
                 except Exception:
                     pass
-        logger.debug("[LLMService] Stream complete: %d chars", len(full_content))
         return full_content
 
     @staticmethod
@@ -315,15 +314,6 @@ def call_llm(
             return response
         finally:
             elapsed_ms = (time.perf_counter() - start) * 1000
-            output = locals().get("response", "")
-            logger.info(
-                "[LLM] provider=%s model=%s elapsed=%.1fms prompt_chars=%d response_chars=%d",
-                provider,
-                model_name,
-                elapsed_ms,
-                len(system_prompt) + len(user_prompt),
-                len(output or ""),
-            )
             if "response" in locals():
                 update_observation(
                     observation,

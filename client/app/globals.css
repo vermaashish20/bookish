@@ -201,3 +201,88 @@ body {
   padding: 8px;
 }
 
+/* Workspace shell — editorial light theme inside the app */
+.bookish-workspace {
+  color-scheme: light;
+  --bookish-page: #fafafa;
+  --bookish-paper: #ffffff;
+  --bookish-ink: #09090b;
+  --bookish-muted: #71717a;
+  --bookish-line: #e4e4e7;
+  --bookish-accent: #059669;
+  --bookish-accent-hover: #047857;
+  --bookish-accent-soft: rgb(5 150 105 / 0.1);
+  min-height: 100dvh;
+  color: var(--bookish-ink);
+  background: var(--bookish-page);
+}
+
+.bookish-field {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--bookish-line);
+  background: #fff;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--bookish-ink);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.bookish-field::placeholder {
+  color: var(--bookish-muted);
+}
+
+.bookish-field:focus {
+  border-color: color-mix(in srgb, var(--bookish-accent) 40%, var(--bookish-line));
+  box-shadow: 0 0 0 3px rgb(5 150 105 / 0.08);
+}
+
+/* Workspace dashboard — matched action buttons */
+.workspace-btn {
+  display: inline-flex;
+  height: 2.5rem;
+  min-width: 8.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  padding: 0 1.25rem;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.workspace-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.workspace-btn--outline {
+  border: 1px solid var(--bookish-line);
+  background: #fff;
+  color: var(--bookish-muted);
+}
+
+.workspace-btn--outline:hover:not(:disabled) {
+  border-color: var(--bookish-accent);
+  color: var(--bookish-ink);
+}
+
+.workspace-btn--primary {
+  border: 1px solid transparent;
+  background: var(--bookish-accent);
+  color: #fff;
+}
+
+.workspace-btn--primary:hover:not(:disabled) {
+  background: var(--bookish-accent-hover);
+}
+

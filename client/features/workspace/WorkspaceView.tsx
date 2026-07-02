@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
+import { Feather, PanelLeft } from 'lucide-react';
 import { uploadAsset, uploadAssetFile } from '@/lib/api';
 import type { Asset, MemorySubTab, PreviewItem, WorkspaceTab } from '@/lib/types';
 import AddAssetModal from '@/components/workspace/AddAssetModal';
@@ -36,10 +37,21 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
     startNewChatSession,
     clearActiveChatSession,
     loading,
+    bookSectionLoading,
+    memorySectionLoading,
+    messagesLoading,
+    ensureMemoryLoaded,
   } =
-    useProject(projectId);
+    useProject(projectId, activeTab);
 
-  const chat = useAgentStream(book, chatMessages, setChatMessages, setBook, activeChatSessionId);
+  const chat = useAgentStream(
+    book,
+    chatMessages,
+    setChatMessages,
+    setBook,
+    activeChatSessionId,
+    startNewChatSession,
+  );
 
   const settings = useModelSettings(projectId, book, updateBook, activeTab === 'Settings');
 
@@ -49,8 +61,11 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
 
   if (loading || !book) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-50 text-xs text-zinc-500">
-        Loading workspace…
+      <div className="bookish-workspace flex h-screen items-center justify-center text-sm text-[var(--bookish-muted)]">
+        <div className="text-center">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--bookish-line)] border-t-[var(--bookish-accent)]" />
+          Loading workspace…
+        </div>
       </div>
     );
   }
@@ -61,9 +76,10 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
     if (!assetName) return;
 
     if (selectedAssetFile) {
-      try {
-        const fresh = await uploadAssetFile(book.id, selectedAssetFile, newAssetType);
-        updateBook(fresh);
+    try {
+      const fresh = await uploadAssetFile(book.id, selectedAssetFile, newAssetType);
+      updateBook(fresh);
+      void ensureMemoryLoaded();
       } catch (err) {
         console.warn('[Assets] Upload failed', err);
       }
@@ -103,6 +119,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
         content,
       });
       updateBook(fresh);
+      void ensureMemoryLoaded();
     } catch (err) {
       console.warn('[Assets] Backend unreachable', err);
     }
@@ -116,7 +133,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="flex h-screen bg-white font-sans text-zinc-900 antialiased selection:bg-zinc-200">
+    <div className="bookish-workspace flex h-screen font-sans text-[var(--bookish-ink)] antialiased selection:bg-[var(--bookish-accent-soft)]">
       <WorkspaceSidebar
         activeChatSessionId={activeChatSessionId ?? ''}
         activeTab={activeTab}
@@ -135,14 +152,22 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-10 shrink-0 items-center border-b border-zinc-300 bg-white px-5">
-          <nav className="flex items-center gap-2 text-[11px]">
-            <Link href="/" className="font-medium text-zinc-950 transition hover:text-black">
-              Dashboard
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--bookish-line)] bg-[color-mix(in_srgb,var(--bookish-paper)_92%,transparent)] px-5 backdrop-blur-sm">
+          <nav className="flex items-center gap-2 text-[13px]">
+            <Link
+              href="/workspace"
+              className="font-medium text-[var(--bookish-muted)] transition hover:text-[var(--bookish-accent)]"
+            >
+              Workspace
             </Link>
-            <span className="select-none text-zinc-500">/</span>
-            <span className="font-semibold tracking-tight text-zinc-900">{book.title}</span>
+            <span className="select-none text-[var(--bookish-line)]">/</span>
+            <span className="font-semibold tracking-tight text-[var(--bookish-ink)]">{book.title}</span>
           </nav>
+          {book.genre && (
+            <span className="hidden rounded-full bg-[var(--bookish-accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-[var(--bookish-accent)] sm:inline">
+              {book.genre}
+            </span>
+          )}
         </header>
 
         <main className="flex min-h-0 flex-1 overflow-hidden">
@@ -150,6 +175,7 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
             <AgentTab
               book={book}
               chatMessages={chatMessages}
+              messagesLoading={messagesLoading}
               isAgentThinking={chat.isAgentThinking}
               currentAgentStatus={chat.currentAgentStatus}
               promptInput={chat.promptInput}
@@ -166,51 +192,50 @@ export function WorkspaceView({ projectId }: { projectId: string }) {
               onClearChatSession={clearActiveChatSession}
             />
           )}
-          {activeTab === 'Book' && (
-            <BookTab book={book} streamedDocumentText={chat.streamedDocumentText} />
-          )}
-          {activeTab === 'Memory' && (
-            <MemoryTab
-              book={book}
-              memorySubTab={memorySubTab}
-              setMemorySubTab={setMemorySubTab}
-              selectedPreviewItem={selectedPreviewItem}
-              setSelectedPreviewItem={setSelectedPreviewItem}
-              setIsAddAssetOpen={setIsAddAssetOpen}
-            />
-          )}
+          {activeTab === 'Book' &&
+            (bookSectionLoading ? (
+              <TabLoading label="Loading manuscript…" />
+            ) : (
+              <BookTab
+                book={book}
+                projectId={projectId}
+                onBookUpdate={updateBook}
+                streamedDocumentText={chat.streamedDocumentText}
+              />
+            ))}
+          {activeTab === 'Memory' &&
+            (memorySectionLoading || bookSectionLoading ? (
+              <TabLoading label="Loading sources & canon…" />
+            ) : (
+              <MemoryTab
+                book={book}
+                memorySubTab={memorySubTab}
+                setMemorySubTab={setMemorySubTab}
+                selectedPreviewItem={selectedPreviewItem}
+                setSelectedPreviewItem={setSelectedPreviewItem}
+                setIsAddAssetOpen={setIsAddAssetOpen}
+              />
+            ))}
           {activeTab === 'Settings' && (
             <SettingsTab
               plannerProvider={settings.plannerProvider}
               setPlannerProvider={settings.setPlannerProvider}
               plannerModel={settings.plannerModel}
               setPlannerModel={settings.setPlannerModel}
+              plannerApiKey={settings.plannerApiKey}
+              setPlannerApiKey={settings.setPlannerApiKey}
               writerProvider={settings.writerProvider}
               setWriterProvider={settings.setWriterProvider}
               writerModel={settings.writerModel}
               setWriterModel={settings.setWriterModel}
+              writerApiKey={settings.writerApiKey}
+              setWriterApiKey={settings.setWriterApiKey}
               worldBuilderProvider={settings.worldBuilderProvider}
               setWorldBuilderProvider={settings.setWorldBuilderProvider}
               worldBuilderModel={settings.worldBuilderModel}
               setWorldBuilderModel={settings.setWorldBuilderModel}
-              anthropicKey={settings.anthropicKey}
-              setAnthropicKey={settings.setAnthropicKey}
-              geminiKey={settings.geminiKey}
-              setGeminiKey={settings.setGeminiKey}
-              openaiKey={settings.openaiKey}
-              setOpenaiKey={settings.setOpenaiKey}
-              openrouterKey={settings.openrouterKey}
-              setOpenrouterKey={settings.setOpenrouterKey}
-              sarvamKey={settings.sarvamKey}
-              setSarvamKey={settings.setSarvamKey}
-              nvidiaKey={settings.nvidiaKey}
-              setNvidiaKey={settings.setNvidiaKey}
-              ollamaEndpoint={settings.ollamaEndpoint}
-              setOllamaEndpoint={settings.setOllamaEndpoint}
-              customEndpoint={settings.customEndpoint}
-              setCustomEndpoint={settings.setCustomEndpoint}
-              customApiKey={settings.customApiKey}
-              setCustomApiKey={settings.setCustomApiKey}
+              worldBuilderApiKey={settings.worldBuilderApiKey}
+              setWorldBuilderApiKey={settings.setWorldBuilderApiKey}
               isSavingSettings={settings.isSavingSettings}
               settingsSaved={settings.settingsSaved}
               onSaveSettings={settings.saveSettings}
@@ -310,31 +335,53 @@ function WorkspaceSidebar({
 
   return (
     <aside
-      className={`flex h-screen shrink-0 flex-col border-r border-zinc-300 bg-white transition-[width] duration-200 ${
+      className={`flex h-screen shrink-0 flex-col border-r border-[var(--bookish-line)] bg-[var(--bookish-paper)] transition-[width] duration-200 ${
         isHistoryPanelOpen ? 'w-52' : 'w-16'
       }`}
     >
-      <div className={`flex h-12 items-center ${isHistoryPanelOpen ? 'justify-between px-4' : 'justify-center'}`}>
-        {isHistoryPanelOpen && (
-          <span className="text-xs font-semibold tracking-tight text-zinc-900">Bookish</span>
+      <div
+        className={`flex h-14 shrink-0 items-center ${
+          isHistoryPanelOpen ? 'justify-between px-3' : 'justify-center px-2'
+        }`}
+      >
+        {isHistoryPanelOpen ? (
+          <>
+            <Link
+              href="/workspace"
+              className="bookish-display inline-flex items-center gap-2 text-xl font-bold tracking-tight text-[var(--bookish-ink)] transition hover:opacity-80"
+              title="Back to workspace"
+            >
+              <Feather className="h-5 w-5 shrink-0 text-[var(--bookish-accent)]" />
+              <span>Bookish</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setIsHistoryPanelOpen(false)}
+              className="flex size-9 items-center justify-center rounded-lg text-[var(--bookish-muted)] transition hover:bg-[var(--bookish-accent-soft)] hover:text-[var(--bookish-ink)]"
+              title="Close sidebar"
+            >
+              <PanelLeft className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </>
+        ) : (
+          <div className="group relative flex size-10 items-center justify-center">
+            <Link
+              href="/workspace"
+              className="inline-flex items-center justify-center transition-opacity group-hover:opacity-0"
+              title="Back to workspace"
+            >
+              <Feather className="h-5 w-5 shrink-0 text-[var(--bookish-accent)]" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setIsHistoryPanelOpen(true)}
+              className="absolute inset-0 flex items-center justify-center rounded-lg text-[var(--bookish-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[var(--bookish-accent-soft)] hover:text-[var(--bookish-ink)]"
+              title="Open sidebar"
+            >
+              <PanelLeft className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
-          className="flex size-9 items-center justify-center rounded-lg text-black transition hover:bg-zinc-100"
-          title={isHistoryPanelOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.8}
-            stroke="currentColor"
-            className="size-4"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h16" />
-          </svg>
-        </button>
       </div>
 
       <div className="flex flex-col gap-1 px-2">
@@ -342,7 +389,7 @@ function WorkspaceSidebar({
           type="button"
           onClick={onNewChatSession}
           title="New chat"
-          className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 ${
+          className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-[var(--bookish-ink)] transition hover:bg-[var(--bookish-accent-soft)] ${
             isHistoryPanelOpen ? 'justify-start' : 'justify-center px-0'
           }`}
         >
@@ -368,8 +415,8 @@ function WorkspaceSidebar({
             title={tab.title}
             className={`flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition ${
               activeTab === tab.id
-                ? 'bg-zinc-100 font-medium text-zinc-950'
-                : 'text-zinc-950 hover:bg-zinc-50'
+                ? 'bg-[var(--bookish-accent-soft)] font-medium text-[var(--bookish-accent)]'
+                : 'text-[var(--bookish-ink)] hover:bg-black/[0.03]'
             } ${isHistoryPanelOpen ? 'justify-start' : 'justify-center px-0'}`}
           >
             <svg
@@ -389,7 +436,7 @@ function WorkspaceSidebar({
 
       {isHistoryPanelOpen && (
         <div className="mt-5 min-h-0 flex-1 overflow-hidden px-3">
-          <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-black">
+          <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--bookish-muted)]">
             History
           </div>
           <div className="h-full space-y-1 overflow-y-auto pb-6">
@@ -400,18 +447,29 @@ function WorkspaceSidebar({
                 onClick={() => onSwitchChatSession(session.id)}
                 className={`w-full truncate rounded-xl px-3 py-2 text-left text-xs transition ${
                   session.id === activeChatSessionId
-                    ? 'bg-zinc-100 font-semibold text-zinc-950'
-                    : 'text-zinc-950 hover:bg-zinc-50'
+                    ? 'bg-[var(--bookish-accent-soft)] font-semibold text-[var(--bookish-accent)]'
+                    : 'text-[var(--bookish-ink)] hover:bg-black/[0.03]'
                 }`}
                 title={session.title || 'Chat'}
               >
                 {session.title || 'Chat'}{' '}
-                <span className="font-normal text-black">({session.messageCount ?? 0})</span>
+                <span className="font-normal text-[var(--bookish-muted)]">({session.messageCount ?? 0})</span>
               </button>
             ))}
           </div>
         </div>
       )}
     </aside>
+  );
+}
+
+function TabLoading({ label }: { label: string }) {
+  return (
+    <div className="flex flex-1 items-center justify-center text-sm text-[var(--bookish-muted)]">
+      <div className="text-center">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--bookish-line)] border-t-[var(--bookish-accent)]" />
+        {label}
+      </div>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ export default function ExplorePage() {
     <div className="bookish-public flex min-h-screen flex-col">
       <PublicNav />
 
-      <main className="flex-1 pb-[88px] pt-10">
+      <main className="flex-1 pb-[88px] pt-20">
         <div className="bookish-wrap">
           <div className="mb-8 max-w-[700px]">
             <p className="mb-2 text-[13px] font-[720] uppercase tracking-[0.12em] text-[var(--bookish-accent)]">

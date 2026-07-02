@@ -1,42 +1,48 @@
 'use client';
 
-import React from 'react';
-import { BookProject, PreviewItem } from '@/lib/types';
+import React, { useCallback } from 'react';
+import { fetchAsset } from '@/lib/api';
+import { Asset, BookProject, PreviewItem } from '@/lib/types';
 
 interface UserContextTimelineProps {
   book: BookProject;
   selectedPreviewItem: PreviewItem | null;
   setSelectedPreviewItem: (item: PreviewItem | null) => void;
-  setIsAddAssetOpen: (open: boolean) => void;
+  onAddSource: () => void;
 }
 
 export default function UserContextTimeline({
   book,
   selectedPreviewItem,
   setSelectedPreviewItem,
-  setIsAddAssetOpen
+  onAddSource,
 }: UserContextTimelineProps) {
   const userAssets = book.assets.filter(a => a.name !== 'Project Initial Brief');
   const initialAssets = userAssets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() < 60000);
   const subsequentAssets = userAssets.filter(a => new Date(a.addedAt).getTime() - new Date(book.createdAt).getTime() >= 60000);
 
-  return (
-    <div className="space-y-4 max-w-3xl">
-      <div className="flex justify-between items-center font-sans">
-        <div>
-          <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Sources</h3>
-          <p className="text-[10px] text-zinc-500 mt-0.5">Initial brief, guidelines, and documents you uploaded for this book.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsAddAssetOpen(true)}
-          className="rounded bg-zinc-950 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-zinc-800 transition shadow-xxs cursor-pointer shrink-0"
-        >
-          + Add
-        </button>
-      </div>
+  const openAssetPreview = useCallback(async (asset: Asset) => {
+    let content = asset.content;
+    if (!content) {
+      try {
+        const full = await fetchAsset(book.id, asset.id);
+        content = full.content ?? '';
+      } catch {
+        content = `Reference content registered for file: ${asset.name}`;
+      }
+    }
+    setSelectedPreviewItem({
+      type: 'user_asset',
+      id: asset.id,
+      title: asset.name,
+      subtitle: `${asset.type} · ${asset.size || '120 KB'}`,
+      content,
+    });
+  }, [book.id, setSelectedPreviewItem]);
 
-      <div className="space-y-6 select-none font-sans">
+  return (
+    <div className="max-w-3xl space-y-6 font-sans">
+      <div className="space-y-6 select-none">
         {/* Initial Group */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -73,18 +79,11 @@ export default function UserContextTimeline({
             {/* Other Initial Assets */}
             {initialAssets.map((asset) => {
               const isActive = selectedPreviewItem?.id === asset.id;
-              const assetContent = (asset as any).content || `Reference content registered for file: ${asset.name}`;
               return (
                 <button
                   key={asset.id}
                   type="button"
-                  onClick={() => setSelectedPreviewItem({
-                    type: 'user_asset',
-                    id: asset.id,
-                    title: asset.name,
-                    subtitle: `${asset.type} · ${asset.size || '120 KB'}`,
-                    content: assetContent
-                  })}
+                  onClick={() => openAssetPreview(asset)}
                   className={`w-full text-left p-3 rounded-lg border text-xs transition shadow-xxs cursor-pointer block ${
                     isActive
                       ? 'bg-zinc-100 border-zinc-950 border-2 text-zinc-950 font-semibold shadow-sm'
@@ -115,18 +114,11 @@ export default function UserContextTimeline({
             <div className="pl-3.5 border-l border-zinc-200 ml-0.5 space-y-2.5">
               {subsequentAssets.map((asset) => {
                 const isActive = selectedPreviewItem?.id === asset.id;
-                const assetContent = (asset as any).content || `Reference content registered for file: ${asset.name}`;
                 return (
                   <button
                     key={asset.id}
                     type="button"
-                    onClick={() => setSelectedPreviewItem({
-                      type: 'user_asset',
-                      id: asset.id,
-                      title: asset.name,
-                      subtitle: `${asset.type} · ${asset.size || '120 KB'}`,
-                      content: assetContent
-                    })}
+                    onClick={() => openAssetPreview(asset)}
                     className={`w-full text-left p-3 rounded-lg border text-xs transition shadow-xxs cursor-pointer block ${
                       isActive
                         ? 'bg-zinc-100 border-zinc-950 border-2 text-zinc-950 font-semibold shadow-sm'
@@ -139,7 +131,7 @@ export default function UserContextTimeline({
                         isActive ? 'bg-indigo-200 text-indigo-800' : 'bg-indigo-100 text-indigo-700'
                       }`}>{asset.type.replace(' Reference', '').replace(' Guidelines', '').replace(' File', '')}</span>
                     </div>
-                    <p className="line-clamp-2 text-[10px] opacity-75">{assetContent.slice(0, 80)}...</p>
+                    <p className="line-clamp-2 text-[10px] opacity-75">Registered file reference context.</p>
                     <span className="text-[8px] block mt-2 opacity-50 font-mono">{new Date(asset.addedAt).toLocaleString()}</span>
                   </button>
                 );
@@ -148,6 +140,14 @@ export default function UserContextTimeline({
           </div>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={onAddSource}
+        className="mt-6 w-full rounded-lg border border-dashed border-[var(--bookish-line)] py-3 text-[12px] font-medium text-[var(--bookish-muted)] transition hover:border-[var(--bookish-accent)] hover:bg-[var(--bookish-accent-soft)] hover:text-[var(--bookish-accent)]"
+      >
+        + Add source
+      </button>
     </div>
   );
 }

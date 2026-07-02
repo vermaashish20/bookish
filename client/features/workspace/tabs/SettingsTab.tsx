@@ -2,40 +2,27 @@
 
 import React from 'react';
 import SettingsPanel from '@/components/workspace/SettingsPanel';
-
-type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'OpenRouter' | 'Sarvam' | 'Nvidia' | 'Custom';
+import type { LLMProvider } from '@/lib/types';
 
 interface SettingsTabProps {
-  plannerProvider: ProviderType;
-  setPlannerProvider: (value: ProviderType) => void;
+  plannerProvider: LLMProvider;
+  setPlannerProvider: (value: LLMProvider) => void;
   plannerModel: string;
   setPlannerModel: (value: string) => void;
-  writerProvider: ProviderType;
-  setWriterProvider: (value: ProviderType) => void;
+  plannerApiKey: string;
+  setPlannerApiKey: (value: string) => void;
+  writerProvider: LLMProvider;
+  setWriterProvider: (value: LLMProvider) => void;
   writerModel: string;
   setWriterModel: (value: string) => void;
-  worldBuilderProvider: ProviderType;
-  setWorldBuilderProvider: (value: ProviderType) => void;
+  writerApiKey: string;
+  setWriterApiKey: (value: string) => void;
+  worldBuilderProvider: LLMProvider;
+  setWorldBuilderProvider: (value: LLMProvider) => void;
   worldBuilderModel: string;
   setWorldBuilderModel: (value: string) => void;
-  anthropicKey: string;
-  setAnthropicKey: (value: string) => void;
-  geminiKey: string;
-  setGeminiKey: (value: string) => void;
-  openaiKey: string;
-  setOpenaiKey: (value: string) => void;
-  openrouterKey: string;
-  setOpenrouterKey: (value: string) => void;
-  sarvamKey: string;
-  setSarvamKey: (value: string) => void;
-  nvidiaKey: string;
-  setNvidiaKey: (value: string) => void;
-  ollamaEndpoint: string;
-  setOllamaEndpoint: (value: string) => void;
-  customEndpoint: string;
-  setCustomEndpoint: (value: string) => void;
-  customApiKey: string;
-  setCustomApiKey: (value: string) => void;
+  worldBuilderApiKey: string;
+  setWorldBuilderApiKey: (value: string) => void;
   isSavingSettings: boolean;
   settingsSaved: boolean;
   onSaveSettings: () => void;

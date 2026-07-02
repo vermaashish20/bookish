@@ -7,9 +7,9 @@ import { getDemoBook, isDemoBookId } from '@/lib/demo/publicBooks';
 import { useProject } from '@/features/workspace/hooks/useProject';
 
 function ApiBookReader({ id }: { id: string }) {
-  const { book, loading } = useProject(id);
+  const { book, loading, bookSectionLoading } = useProject(id, 'Book');
 
-  if (loading) {
+  if (loading || bookSectionLoading) {
     return (
       <div className="bookish-public flex min-h-screen items-center justify-center text-sm text-[var(--bookish-muted)]">
         Loading book…

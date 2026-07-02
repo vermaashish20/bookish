@@ -6,11 +6,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agent, projects, webhooks
+from app.api import agent, projects, users, webhooks
 from app.infrastructure.database.mongo import init_db
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=os.getenv("LOG_LEVEL", "WARNING").upper(),
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     application.include_router(projects.router)
+    application.include_router(users.router)
     application.include_router(agent.router)
     application.include_router(webhooks.router)
 

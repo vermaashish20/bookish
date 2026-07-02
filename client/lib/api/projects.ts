@@ -8,19 +8,73 @@ import type {
   SettingsResponse,
 } from '@/lib/types/api';
 import type { BookProject } from '@/lib/types';
-import type { ChatSession, GeneratedArtifact } from '@/lib/types/project';
+import type { Asset, ChapterItem, ChatSession, GeneratedArtifact } from '@/lib/types/project';
 
-export const fetchProjects = () =>
-  request<BookProject[]>(endpoints.projects.list);
+let projectsListInflight: Promise<BookProject[]> | null = null;
+const projectInflight = new Map<string, Promise<BookProject>>();
+
+export function fetchProjects(options?: { force?: boolean }) {
+  if (!options?.force && projectsListInflight) {
+    return projectsListInflight;
+  }
+
+  const promise = request<BookProject[]>(endpoints.projects.list);
+  projectsListInflight = promise;
+
+  promise.finally(() => {
+    if (projectsListInflight === promise) {
+      projectsListInflight = null;
+    }
+  });
+
+  return promise;
+}
+
+export function invalidateProjectsList() {
+  projectsListInflight = null;
+}
+
+export function invalidateProject(id: string) {
+  projectInflight.delete(id);
+}
+
+/** Minimal shell (title, genre, empty tab placeholders). */
+export function fetchProject(id: string, options?: { force?: boolean }) {
+  if (!options?.force) {
+    const inflight = projectInflight.get(id);
+    if (inflight) return inflight;
+  }
+
+  const promise = request<BookProject>(endpoints.projects.get(id));
+  projectInflight.set(id, promise);
+  promise.finally(() => {
+    if (projectInflight.get(id) === promise) {
+      projectInflight.delete(id);
+    }
+  });
+  return promise;
+}
+
+export type ProjectBookSection = Pick<BookProject, 'chapters' | 'status'>;
+export type ProjectMemorySection = Pick<BookProject, 'brief' | 'assets' | 'memory'>;
+
+export const fetchProjectBook = (id: string) =>
+  request<ProjectBookSection>(endpoints.projects.book(id));
+
+export const fetchProjectMemory = (id: string) =>
+  request<ProjectMemorySection>(endpoints.projects.memory(id));
+
+export const fetchChapter = (projectId: string, chapterId: string) =>
+  request<ChapterItem>(endpoints.projects.chapter(projectId, chapterId));
+
+export const fetchAsset = (projectId: string, assetId: string) =>
+  request<Asset>(endpoints.projects.asset(projectId, assetId));
 
 export const createProject = (payload: CreateProjectPayload) =>
   request<BookProject>(endpoints.projects.create, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-
-export const fetchProject = (id: string) =>
-  request<BookProject>(endpoints.projects.get(id));
 
 export const deleteProject = (id: string) =>
   request<DeleteResponse>(endpoints.projects.delete(id), { method: 'DELETE' });

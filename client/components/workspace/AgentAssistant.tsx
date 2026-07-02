@@ -45,6 +45,7 @@ type PendingConfirmation = {
 
 interface AgentAssistantProps {
   chatMessages: ChatMessage[];
+  messagesLoading?: boolean;
   isAgentThinking: boolean;
   currentAgentStatus?: string;
   promptInput: string;
@@ -81,6 +82,7 @@ function senderLabel(sender: ChatMessage['sender']) {
 
 export default function AgentAssistant({
   chatMessages,
+  messagesLoading = false,
   isAgentThinking,
   currentAgentStatus,
   promptInput,
@@ -100,7 +102,11 @@ export default function AgentAssistant({
       <div className="flex h-full flex-col">
         <Conversation className="min-h-0 flex-1">
           <ConversationContent className="mx-auto w-full max-w-3xl gap-5 px-6 py-5">
-            {chatMessages.length === 0 ? (
+            {messagesLoading ? (
+              <div className="flex min-h-[420px] items-center justify-center text-xs text-zinc-500">
+                Loading conversation…
+              </div>
+            ) : chatMessages.length === 0 ? (
               <ConversationEmptyState
                 className="min-h-[420px]"
                 description="The assistant can plan work, pause for approval, retrieve project knowledge, and draft into the workspace."
@@ -135,7 +141,11 @@ export default function AgentAssistant({
               </ConversationEmptyState>
             ) : (
               chatMessages.map((message) => (
-                <Message key={message.id} from={messageRole(message.sender)}>
+                <Message
+                  key={message.id}
+                  from={messageRole(message.sender)}
+                  className={cn('gap-1', message.sender !== 'user' && 'max-w-full')}
+                >
                   <div className="mb-1 flex items-center gap-1.5 px-1 text-[10px] text-black group-[.is-user]:justify-end">
                     <span className="font-semibold text-black">{senderLabel(message.sender)}</span>
                     <span>/</span>
@@ -143,14 +153,17 @@ export default function AgentAssistant({
                   </div>
                   <MessageContent
                     className={cn(
-                      'rounded-3xl px-4 py-3',
                       message.sender === 'user'
-                        ? 'rounded-tr-sm border border-zinc-300 bg-white text-zinc-900 shadow-xs group-[.is-user]:bg-white group-[.is-user]:text-zinc-900'
-                        : 'bg-transparent text-zinc-800 shadow-none',
+                        ? 'gap-0 overflow-hidden rounded-xl rounded-tr-sm border border-zinc-300 bg-white px-3 py-1.5 text-sm leading-snug text-zinc-900 shadow-xs group-[.is-user]:bg-white group-[.is-user]:px-3 group-[.is-user]:py-1.5 group-[.is-user]:text-zinc-900'
+                        : 'gap-0 overflow-visible rounded-none bg-transparent px-0 py-0 text-zinc-800 shadow-none',
                     )}
                   >
                     {message.text ? (
-                      <MessageResponse>{message.text}</MessageResponse>
+                      <MessageResponse
+                        className={message.sender === 'user' ? '[&_p]:my-0' : undefined}
+                      >
+                        {message.text}
+                      </MessageResponse>
                     ) : (
                       <div className="flex items-center gap-1.5 py-1">
                         <span className="size-1.5 rounded-full bg-zinc-300 animate-pulse" />

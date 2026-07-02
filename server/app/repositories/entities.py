@@ -9,7 +9,7 @@ from app.core.streaming import publish_sync_event
 
 def _entity_memory_payload(entity: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "id": entity.get("id") or entity.get("_id"),
+        "id": entity.get("_id") or entity.get("id"),
         "name": entity.get("name", "Unnamed Entity"),
         "type": entity.get("type", "concept"),
         "description": entity.get("description", ""),
@@ -31,7 +31,6 @@ def add_entity(
     entity_id = f"entity_{ObjectId()}"
     entity = {
         "_id": entity_id,
-        "id": entity_id,
         "projectId": project_id,
         "name": name,
         "type": entity_type,

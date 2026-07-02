@@ -42,7 +42,7 @@ export function PublicBookReader({ book, author = 'Bookish' }: PublicBookReaderP
     <div className="bookish-public flex min-h-screen flex-col">
       <PublicNav />
 
-      <div className="bookish-wrap flex-1 py-8">
+      <div className="bookish-wrap flex-1 pb-8 pt-20">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link href="/explore" className="text-xs font-[720] text-[var(--bookish-accent)] hover:underline">

@@ -1,14 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/AuthProvider';
 import { fetchProjects } from '@/lib/api';
 import { pickCoverTone, SHOWCASE_BOOKS, type PublicBookCard } from '@/lib/demo/publicBooks';
 
 export function usePublicShelfBooks() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [apiBooks, setApiBooks] = useState<PublicBookCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadPublicBooks = useCallback(async () => {
+    if (!isAuthenticated) {
+      setApiBooks([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const projects = await fetchProjects();
@@ -28,11 +36,12 @@ export function usePublicShelfBooks() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    loadPublicBooks();
-  }, [loadPublicBooks]);
+    if (authLoading) return;
+    void loadPublicBooks();
+  }, [authLoading, loadPublicBooks]);
 
   const shelfBooks = useMemo(() => {
     const seen = new Set<string>();

@@ -1,6 +1,5 @@
 """Shared FastAPI dependencies."""
 import os
-import logging
 from functools import lru_cache
 from typing import Optional
 
@@ -9,21 +8,49 @@ import jwt
 from fastapi import Header, HTTPException
 
 from app.repositories.projects import get_project
-
-logger = logging.getLogger(__name__)
+from app.repositories.users import ensure_user_record
 
 # ---------------------------------------------------------------------------
 # Clerk JWT verification
 # ---------------------------------------------------------------------------
 
-CLERK_JWKS_URL = "https://api.clerk.com/v1/jwks"
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "")
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "https://api.clerk.com/v1/jwks")
+CLERK_JWT_ISSUER = os.getenv("CLERK_JWT_ISSUER", "").strip().rstrip("/")
+# Tolerate small clock drift between Clerk, client, and this server (iat/exp).
+JWT_LEEWAY_SECONDS = int(os.getenv("CLERK_JWT_LEEWAY_SECONDS", "60"))
+
+
+def _jwt_issuer() -> str:
+    issuer = CLERK_JWT_ISSUER
+    if issuer.endswith("/.well-known/jwks.json"):
+        issuer = issuer[: -len("/.well-known/jwks.json")]
+    return issuer.rstrip("/")
 
 
 @lru_cache(maxsize=1)
 def _fetch_jwks() -> dict:
     """Fetch Clerk's JWKS (cached for process lifetime; restart to rotate)."""
-    resp = httpx.get(CLERK_JWKS_URL, timeout=10)
-    resp.raise_for_status()
+    if not CLERK_SECRET_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="CLERK_SECRET_KEY is not configured on the server.",
+        )
+
+    headers = {
+        "Authorization": f"Bearer {CLERK_SECRET_KEY}",
+        "User-Agent": "bookish-backend",
+    }
+    try:
+        resp = httpx.get(CLERK_JWKS_URL, headers=headers, timeout=10)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch Clerk JWKS ({exc.response.status_code}).",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=500, detail="Failed to reach Clerk JWKS.") from exc
     return resp.json()
 
 
@@ -68,11 +95,19 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
         raise HTTPException(status_code=401, detail="JWT signing key not found.")
 
     try:
+        decode_options = {"require": ["sub", "exp", "iat"]}
+        decode_kwargs: dict = {
+            "algorithms": ["RS256"],
+            "options": decode_options,
+        }
+        if issuer := _jwt_issuer():
+            decode_kwargs["issuer"] = issuer
+
         payload = jwt.decode(
             token,
             public_key,
-            algorithms=["RS256"],
-            options={"require": ["sub", "exp", "iat"]},
+            leeway=JWT_LEEWAY_SECONDS,
+            **decode_kwargs,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired.")
@@ -82,6 +117,12 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     user_id: Optional[str] = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Token missing 'sub' claim.")
+
+    ensure_user_record(
+        user_id,
+        email=str(payload.get("email") or ""),
+        username=str(payload.get("username") or ""),
+    )
 
     return user_id
 

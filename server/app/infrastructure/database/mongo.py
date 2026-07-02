@@ -1,10 +1,18 @@
 import pymongo
 from app.config import MONGO_URI, MONGO_DB_NAME
 
+_client: pymongo.MongoClient | None = None
+
+
+def get_client() -> pymongo.MongoClient:
+    global _client
+    if _client is None:
+        _client = pymongo.MongoClient(MONGO_URI)
+    return _client
+
 
 def get_db():
-    client = pymongo.MongoClient(MONGO_URI)
-    return client[MONGO_DB_NAME]
+    return get_client()[MONGO_DB_NAME]
 
 
 def init_db():
@@ -12,6 +20,7 @@ def init_db():
 
     # Drop any stale unique index on "id" fields (legacy schema artifact)
     for collection_name in (
+        "users",
         "projects",
         "chapters",
         "character_bible",
@@ -26,6 +35,10 @@ def init_db():
             if index["name"] == "id_1" and index.get("unique"):
                 collection.drop_index(index["name"])
 
+    # Users (Clerk mirror)
+    db.users.create_index("email")
+    db.users.create_index([("lastSeenAt", pymongo.DESCENDING)])
+
     # projectId FK indexes
     db.chapters.create_index("projectId")
     db.character_bible.create_index("projectId")
@@ -36,6 +49,7 @@ def init_db():
     db.chat_messages.create_index("projectId")
 
     # Sorting / range indexes
+    db.projects.create_index([("userId", pymongo.ASCENDING), ("createdAt", pymongo.DESCENDING)])
     db.projects.create_index([("createdAt", pymongo.DESCENDING)])
     db.chapters.create_index([("projectId", pymongo.ASCENDING), ("number", pymongo.ASCENDING)], unique=True)
     db.agent_runs.create_index([("projectId", pymongo.ASCENDING), ("startedAt", pymongo.DESCENDING)])

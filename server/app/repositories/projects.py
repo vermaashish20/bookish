@@ -1,10 +1,11 @@
 from typing import Dict, Any, Optional, List
+from concurrent.futures import ThreadPoolExecutor
 from bson import ObjectId
 from app.infrastructure.database.mongo import get_db
 from app.infrastructure.vector.store import delete_project_vectors
 
-from app.repositories.assets import get_project_assets
-from app.repositories.chapters import get_project_chapters
+from app.repositories.assets import get_project_assets, get_project_brief
+from app.repositories.chapters import get_project_chapters, get_chapter_summaries
 from app.repositories.characters import get_project_characters
 from app.repositories.entities import get_project_entities
 from app.repositories.artifacts import get_project_artifacts
@@ -12,7 +13,7 @@ from app.repositories.artifacts import get_project_artifacts
 
 def _format_character_for_memory(character: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "id": character.get("id") or character.get("_id"),
+        "id": character.get("_id") or character.get("id"),
         "name": character.get("name", "Unnamed Character"),
         "role": character.get("role", ""),
         "arc": character.get("arc", ""),
@@ -24,7 +25,7 @@ def _format_character_for_memory(character: Dict[str, Any]) -> Dict[str, Any]:
 
 def _format_entity_for_memory(entity: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "id": entity.get("id") or entity.get("_id"),
+        "id": entity.get("_id") or entity.get("id"),
         "name": entity.get("name", "Unnamed Entity"),
         "type": entity.get("type", "concept"),
         "description": entity.get("description", ""),
@@ -72,41 +73,295 @@ def update_project_settings(project_id: str, settings: Dict[str, Any]) -> None:
     )
 
 
+def _shell_memory(project: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "projectVoice": {
+            "genre": project.get("genre", ""),
+            "tonality": project.get("tonality", "Conversational"),
+            "bookSummary": project.get("bookSummary", ""),
+            "readerProfile": project.get("readerProfile", ""),
+            "targetWordCount": project.get("targetWordCount"),
+            "forbiddenPhrases": project.get("forbiddenPhrases", []),
+        },
+        "characters": [],
+        "worldEntities": [],
+    }
+
+
+def get_project_shell(
+    project_id: str,
+    project: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Minimal project record for workspace open (header + agent shell).
+    One Mongo read — no chapters, assets, characters, or artifacts.
+    """
+    p = project or get_project(project_id)
+    if not p:
+        return None
+    return {
+        "id": p["_id"],
+        "title": p["title"],
+        "subtitle": p.get("subtitle", ""),
+        "genre": p.get("genre", ""),
+        "tonality": p.get("tonality", "Conversational"),
+        "readerProfile": p.get("readerProfile", ""),
+        "targetWordCount": p.get("targetWordCount"),
+        "bookSummary": p.get("bookSummary", ""),
+        "status": "Planning",
+        "createdAt": p["createdAt"],
+        "brief": "",
+        "chapters": [],
+        "assets": [],
+        "artifacts": [],
+        "settings": p.get("settings", {}),
+        "memory": _shell_memory(p),
+    }
+
+
+def get_project_book_section(project_id: str) -> Dict[str, Any]:
+    """Chapter summaries for the Book tab (no manuscript bodies)."""
+    chapters = get_chapter_summaries(project_id)
+    has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
+    return {
+        "chapters": chapters,
+        "status": "Reviewing" if has_published else "Planning",
+    }
+
+
+def get_project_memory_section(
+    project_id: str,
+    project: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Sources + canon for the Memory tab."""
+    p = project or get_project(project_id)
+    if not p:
+        return {}
+
+    def load_characters():
+        return get_project_characters(project_id)
+
+    def load_entities():
+        return get_project_entities(project_id)
+
+    def load_assets():
+        return get_project_assets(project_id, include_content=False)
+
+    def load_brief():
+        return get_project_brief(project_id)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        characters = pool.submit(load_characters).result()
+        entities = pool.submit(load_entities).result()
+        assets = pool.submit(load_assets).result()
+        brief = pool.submit(load_brief).result()
+
+    return {
+        "brief": brief,
+        "assets": assets,
+        "memory": build_project_memory_payload(p, characters, entities),
+    }
+
+
+def _build_project_payload(
+    project: Dict[str, Any],
+    *,
+    chapters: List[Dict[str, Any]],
+    characters: List[Dict[str, Any]],
+    entities: List[Dict[str, Any]],
+    assets: List[Dict[str, Any]],
+    artifacts: List[Dict[str, Any]],
+    brief: str,
+) -> Dict[str, Any]:
+    has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
+    return {
+        "id": project["_id"],
+        "title": project["title"],
+        "subtitle": project.get("subtitle", ""),
+        "genre": project.get("genre", ""),
+        "brief": brief,
+        "tonality": project["tonality"],
+        "readerProfile": project.get("readerProfile", ""),
+        "targetWordCount": project.get("targetWordCount"),
+        "status": "Reviewing" if has_published else "Planning",
+        "createdAt": project["createdAt"],
+        "bookSummary": project.get("bookSummary", ""),
+        "chapters": chapters,
+        "assets": assets,
+        "artifacts": artifacts,
+        "settings": project.get("settings", {}),
+        "memory": build_project_memory_payload(project, characters, entities),
+    }
+
+
+def _load_project_related(
+    project_id: str,
+    *,
+    include_chapter_content: bool,
+    include_asset_content: bool,
+) -> Dict[str, Any]:
+    def load_chapters():
+        if include_chapter_content:
+            return get_project_chapters(project_id)
+        return get_chapter_summaries(project_id)
+
+    def load_characters():
+        return get_project_characters(project_id)
+
+    def load_entities():
+        return get_project_entities(project_id)
+
+    def load_assets():
+        return get_project_assets(project_id, include_content=include_asset_content)
+
+    def load_artifacts():
+        return get_project_artifacts(project_id, include_content=False)
+
+    def load_brief():
+        if include_asset_content:
+            assets = get_project_assets(project_id, include_content=True)
+            return assets[0]["content"] if assets else ""
+        return get_project_brief(project_id)
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        chapters_f = pool.submit(load_chapters)
+        characters_f = pool.submit(load_characters)
+        entities_f = pool.submit(load_entities)
+        assets_f = pool.submit(load_assets)
+        artifacts_f = pool.submit(load_artifacts)
+        brief_f = pool.submit(load_brief)
+        return {
+            "chapters": chapters_f.result(),
+            "characters": characters_f.result(),
+            "entities": entities_f.result(),
+            "assets": assets_f.result(),
+            "artifacts": artifacts_f.result(),
+            "brief": brief_f.result(),
+        }
+
+
+def get_workspace_project_payload(
+    project_id: str,
+    project: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Fast workspace shell payload — chapter summaries and asset metadata only.
+    Full bodies are loaded on demand via chapter/asset detail endpoints.
+    """
+    p = project or get_project(project_id)
+    if not p:
+        return None
+
+    related = _load_project_related(
+        project_id,
+        include_chapter_content=False,
+        include_asset_content=False,
+    )
+    return _build_project_payload(p, **related)
+
+
 def get_unified_project_payload(project_id: str) -> Optional[Dict[str, Any]]:
     """
-    Full project payload for the workspace view.
-    Returns the workspace payload used by the frontend as source of truth.
+    Full project payload including chapter and asset bodies.
+    Used after mutations that need a complete client refresh.
     """
     p = get_project(project_id)
     if not p:
         return None
 
-    chapters = get_project_chapters(project_id)
-    characters = get_project_characters(project_id)
-    entities = get_project_entities(project_id)
-    assets = get_project_assets(project_id)
-    artifacts = get_project_artifacts(project_id, include_content=False)
+    related = _load_project_related(
+        project_id,
+        include_chapter_content=True,
+        include_asset_content=True,
+    )
+    return _build_project_payload(p, **related)
 
-    has_published = any(c.get("status") in {"published", "completed"} for c in chapters)
 
-    return {
-        "id":        p["_id"],
-        "title":     p["title"],
-        "subtitle":  p.get("subtitle", ""),
-        "genre":     p.get("genre", ""),
-        "brief":     assets[0]["content"] if assets else "",
-        "tonality":  p["tonality"],
-        "readerProfile": p.get("readerProfile", ""),
-        "targetWordCount": p.get("targetWordCount"),
-        "status":    "Reviewing" if has_published else "Planning",
-        "createdAt": p["createdAt"],
-        "bookSummary": p.get("bookSummary", ""),
-        "chapters":  chapters,
-        "assets":    assets,
-        "artifacts": artifacts,
-        "settings":  p.get("settings", {}),
-        "memory": build_project_memory_payload(p, characters, entities),
-    }
+def list_project_summaries(user_id: str) -> List[Dict[str, Any]]:
+    """
+    Batch-fetch lightweight project rows for list views.
+    Uses three Mongo round-trips regardless of project count.
+    """
+    db = get_db()
+    projects = list(
+        db.projects.find(
+            {"userId": user_id},
+            {
+                "title": 1,
+                "subtitle": 1,
+                "genre": 1,
+                "tonality": 1,
+                "createdAt": 1,
+            },
+        ).sort("createdAt", -1)
+    )
+    if not projects:
+        return []
+
+    project_ids = [p["_id"] for p in projects]
+
+    chapter_stats: Dict[str, Dict[str, int]] = {}
+    for row in db.chapters.aggregate(
+        [
+            {"$match": {"projectId": {"$in": project_ids}}},
+            {
+                "$group": {
+                    "_id": "$projectId",
+                    "chapterCount": {"$sum": 1},
+                    "publishedChapterCount": {
+                        "$sum": {
+                            "$cond": [
+                                {"$in": ["$status", ["published", "completed"]]},
+                                1,
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+        ]
+    ):
+        chapter_stats[row["_id"]] = row
+
+    asset_stats: Dict[str, Dict[str, Any]] = {}
+    for row in db.user_assets.aggregate(
+        [
+            {"$match": {"projectId": {"$in": project_ids}}},
+            {"$sort": {"addedAt": 1}},
+            {
+                "$group": {
+                    "_id": "$projectId",
+                    "assetCount": {"$sum": 1},
+                    "brief": {"$first": "$content"},
+                }
+            },
+        ]
+    ):
+        asset_stats[row["_id"]] = row
+
+    result: List[Dict[str, Any]] = []
+    for p in projects:
+        pid = p["_id"]
+        chapters = chapter_stats.get(pid, {})
+        assets = asset_stats.get(pid, {})
+        published = chapters.get("publishedChapterCount", 0)
+        result.append(
+            {
+                "id": pid,
+                "title": p["title"],
+                "subtitle": p.get("subtitle", ""),
+                "genre": p.get("genre", ""),
+                "brief": str(assets.get("brief") or ""),
+                "tonality": p.get("tonality", "Conversational"),
+                "status": "Reviewing" if published else "Ready",
+                "createdAt": p["createdAt"],
+                "assets": [],
+                "assetCount": assets.get("assetCount", 0),
+                "chapterCount": chapters.get("chapterCount", 0),
+                "publishedChapterCount": published,
+            }
+        )
+    return result
 
 
 def get_project_summary(project_id: str) -> Optional[Dict[str, Any]]:
@@ -175,7 +430,6 @@ def create_project(
     project_id = f"project_{ObjectId()}"
     db.projects.insert_one({
         "_id":        project_id,
-        "id":         project_id,
         "userId":     user_id,
         "title":      title,
         "subtitle":   subtitle,

@@ -20,7 +20,6 @@ def add_chapter(project_id: str, number: int, title: str, content: Optional[str]
     chapter_id = f"chapter_{ObjectId()}"
     chapter = {
         "_id": chapter_id,
-        "id": chapter_id,
         "projectId": project_id,
         "number": number,
         "title": title,
@@ -33,6 +32,14 @@ def add_chapter(project_id: str, number: int, title: str, content: Optional[str]
     enqueue_index_chapter(project_id, chapter_id)
     publish_sync_event("chapter_upserted", chapter=chapter)
     return chapter_id
+
+
+def get_chapter_by_id(project_id: str, chapter_id: str) -> Optional[Dict[str, Any]]:
+    db = get_db()
+    chapter = db.chapters.find_one({"_id": chapter_id, "projectId": project_id})
+    if chapter:
+        chapter["id"] = chapter["_id"]
+    return chapter
 
 
 def get_project_chapters(project_id: str) -> List[Dict[str, Any]]:

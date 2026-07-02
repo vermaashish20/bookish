@@ -8,12 +8,18 @@ export const endpoints = {
     list: '/api/projects',
     create: '/api/projects',
     get: (id: string) => `/api/projects/${id}`,
+    book: (id: string) => `/api/projects/${id}/book`,
+    memory: (id: string) => `/api/projects/${id}/memory`,
     delete: (id: string) => `/api/projects/${id}`,
     settings: {
       get: (id: string) => `/api/projects/${id}/settings`,
       update: (id: string) => `/api/projects/${id}/settings`,
     },
     assets: (id: string) => `/api/projects/${id}/assets`,
+    asset: (id: string, assetId: string) =>
+      `/api/projects/${id}/assets/${encodeURIComponent(assetId)}`,
+    chapter: (id: string, chapterId: string) =>
+      `/api/projects/${id}/chapters/${encodeURIComponent(chapterId)}`,
     artifact: (id: string, artifactId: string) =>
       `/api/projects/${id}/artifacts/${encodeURIComponent(artifactId)}`,
     messages: (id: string, threadId?: string) =>

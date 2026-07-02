@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -46,14 +45,10 @@ class IndexedChunk(TypedDict):
 def _submit_index_job(job_name: str, fn, *args, **kwargs) -> None:
     """Run Chroma indexing off the request/agent path."""
     def runner() -> None:
-        start = time.perf_counter()
         try:
             fn(*args, **kwargs)
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.info("[Indexing] %s completed in %.1fms", job_name, elapsed_ms)
         except Exception:
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.exception("[Indexing] %s failed after %.1fms", job_name, elapsed_ms)
+            logger.exception("[Indexing] %s failed", job_name)
 
     _INDEX_EXECUTOR.submit(runner)
 
@@ -293,23 +288,9 @@ def index_text(
     if not clean_text:
         return
 
-    logger.info(
-        "[Indexing] ingest document received collection=%s root_id=%s project_id=%s sourceKind=%s chars=%s",
-        collection_name,
-        doc_id,
-        project_id,
-        meta.get("sourceKind", "unknown"),
-        len(clean_text),
-    )
     delete_document(collection_name, doc_id)
     delete_document_chunks(collection_name, project_id, doc_id)
     chunks = build_index_chunks(doc_id, clean_text)
-    logger.info(
-        "[Indexing] chunking completed root_id=%s project_id=%s chunks=%s strategy=structure_recursive_parent_child_v1",
-        doc_id,
-        project_id,
-        len(chunks),
-    )
     for chunk in chunks:
         upsert_document(
             collection_name,
@@ -330,13 +311,6 @@ def index_text(
                 "chunkingStrategy": "structure_recursive_parent_child_v1",
             },
         )
-    logger.info(
-        "[Indexing] ingest document completed collection=%s root_id=%s project_id=%s chunks=%s",
-        collection_name,
-        doc_id,
-        project_id,
-        len(chunks),
-    )
 
 
 def index_chapter(project_id: str, chapter_id: str) -> None:
@@ -473,4 +447,3 @@ def reindex_project(project_id: str) -> None:
         index_user_asset(project_id, doc["_id"], doc.get("type", ""))
     for doc in db.artifacts.find({"projectId": project_id}):
         index_artifact(doc["_id"])
-    logger.info("Reindexed project %s into Chroma", project_id)

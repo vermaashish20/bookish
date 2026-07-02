@@ -3,12 +3,7 @@ from typing import Any, Dict, List
 
 _ENV_KEY_MAP = {
     "nvidia": "NVIDIA_API_KEY",
-    "claude": "ANTHROPIC_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
     "sarvam": "SARVAM_API_KEY",
-    "gemini": "GEMINI_API_KEY",
 }
 
 

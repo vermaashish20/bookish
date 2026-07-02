@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   clearChatThreadMessages,
   createChatThread,
   fetchChatThreads,
   fetchProject,
+  fetchProjectBook,
+  fetchProjectMemory,
   fetchProjectMessages,
 } from '@/lib/api';
-import type { BookProject, ChatMessage, ChatSession } from '@/lib/types';
+import type { BookProject, ChatMessage, ChatSession, WorkspaceTab } from '@/lib/types';
 import { sanitizeAssistantText } from '@/lib/agent/display';
 
 type PersistedChatMessage = {
@@ -44,16 +46,24 @@ function mapPersistedMessages(messages: PersistedChatMessage[]): ChatMessage[] {
   }));
 }
 
-export function useProject(projectId: string) {
+export function useProject(projectId: string, activeTab: WorkspaceTab) {
   const router = useRouter();
   const [book, setBook] = useState<BookProject | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatThreads, setChatThreads] = useState<ChatSession[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bookSectionLoading, setBookSectionLoading] = useState(false);
+  const [memorySectionLoading, setMemorySectionLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const sectionsLoaded = useRef({ book: false, memory: false });
 
   const updateBook = useCallback((updated: BookProject) => {
     setBook(updated);
+    if (updated.chapters?.length) sectionsLoaded.current.book = true;
+    if (updated.assets?.length || updated.memory?.characters?.length) {
+      sectionsLoaded.current.memory = true;
+    }
   }, []);
 
   const loadMessagesForThread = useCallback(async (threadId: string) => {
@@ -61,33 +71,53 @@ export function useProject(projectId: string) {
     setChatMessages(mapPersistedMessages(messages as PersistedChatMessage[]));
   }, [projectId]);
 
+  const ensureBookLoaded = useCallback(async () => {
+    if (sectionsLoaded.current.book) return;
+    setBookSectionLoading(true);
+    try {
+      const section = await fetchProjectBook(projectId);
+      sectionsLoaded.current.book = true;
+      setBook((prev) => (prev ? { ...prev, ...section } : prev));
+    } catch (err) {
+      console.error('Failed to load book section', err);
+    } finally {
+      setBookSectionLoading(false);
+    }
+  }, [projectId]);
+
+  const ensureMemoryLoaded = useCallback(async () => {
+    if (sectionsLoaded.current.memory) return;
+    setMemorySectionLoading(true);
+    try {
+      const section = await fetchProjectMemory(projectId);
+      sectionsLoaded.current.memory = true;
+      setBook((prev) => (prev ? { ...prev, ...section } : prev));
+    } catch (err) {
+      console.error('Failed to load memory section', err);
+    } finally {
+      setMemorySectionLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    sectionsLoaded.current = { book: false, memory: false };
+    setActiveThreadId(null);
+    setChatMessages([]);
 
     Promise.all([
       fetchProject(projectId),
       fetchChatThreads(projectId).catch(() => []),
     ])
-      .then(async ([project, threads]) => {
+      .then(([shell, threads]) => {
         if (cancelled) return;
-        const normalizedThreads = (threads as ChatSession[]).map(normalizeThread);
-        const initialThreadId = normalizedThreads[0]?.id ?? null;
-        setBook(project);
-        setChatThreads(normalizedThreads);
-        setActiveThreadId(initialThreadId);
-        if (initialThreadId) {
-          const messages = await fetchProjectMessages(projectId, initialThreadId).catch(() => []);
-          if (!cancelled) setChatMessages(mapPersistedMessages(messages as PersistedChatMessage[]));
-        } else {
-          setChatMessages([]);
-        }
+        setBook(shell);
+        setChatThreads((threads as ChatSession[]).map(normalizeThread));
+        setLoading(false);
       })
       .catch(() => {
         if (!cancelled) router.push('/');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -95,16 +125,35 @@ export function useProject(projectId: string) {
     };
   }, [projectId, router]);
 
-  const switchChatThread = useCallback(async (threadId: string) => {
-    setActiveThreadId(threadId);
-    await loadMessagesForThread(threadId);
-  }, [loadMessagesForThread]);
+  useEffect(() => {
+    if (activeTab === 'Book') void ensureBookLoaded();
+    if (activeTab === 'Memory') {
+      void ensureMemoryLoaded();
+      // Chapter summaries live in the book section; needed for Project knowledge.
+      void ensureBookLoaded();
+    }
+  }, [activeTab, ensureBookLoaded, ensureMemoryLoaded]);
+
+  const switchChatThread = useCallback(
+    async (threadId: string) => {
+      setActiveThreadId(threadId);
+      setChatMessages([]);
+      setMessagesLoading(true);
+      try {
+        await loadMessagesForThread(threadId);
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [loadMessagesForThread],
+  );
 
   const startNewChatThread = useCallback(async () => {
     const thread = normalizeThread(await createChatThread(projectId));
     setChatThreads((prev) => [thread, ...prev.filter((item) => item.id !== thread.id)]);
     setActiveThreadId(thread.id);
     setChatMessages([]);
+    return thread.id;
   }, [projectId]);
 
   const clearActiveChatThread = useCallback(async () => {
@@ -137,6 +186,10 @@ export function useProject(projectId: string) {
     clearActiveChatThread,
     clearActiveChatSession: clearActiveChatThread,
     loading,
+    bookSectionLoading,
+    memorySectionLoading,
+    messagesLoading,
+    ensureMemoryLoaded,
   };
 }
 

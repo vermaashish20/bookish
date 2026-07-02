@@ -13,7 +13,7 @@ export interface CreateProjectPayload {
   title: string;
   subtitle?: string;
   genre?: string;
-  brief: string;
+  brief?: string;
 }
 
 export interface AssetPayload {

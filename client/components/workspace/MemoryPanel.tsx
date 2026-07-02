@@ -6,6 +6,7 @@ import UserContextTimeline from './UserContextTimeline';
 import ProjectKnowledge from './ProjectKnowledge';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { normalizeMarkdownForDisplay } from '@/lib/markdown/display';
 
 interface MemoryPanelProps {
   book: BookProject;
@@ -14,6 +15,38 @@ interface MemoryPanelProps {
   selectedPreviewItem: PreviewItem | null;
   setSelectedPreviewItem: (item: PreviewItem | null) => void;
   setIsAddAssetOpen: (open: boolean) => void;
+}
+
+const MEMORY_DESCRIPTION =
+  'Uploaded sources and approved project knowledge — the context agents use when planning and writing.';
+
+const SUB_TABS: { id: MemorySubTab; label: string }[] = [
+  { id: 'Sources', label: 'Sources' },
+  { id: 'Knowledge', label: 'Project knowledge' },
+];
+
+function MemorySubTabButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border-b-2 px-1 pb-2.5 pt-1 text-[13px] transition focus:outline-none ${
+        active
+          ? 'border-[var(--bookish-accent)] font-semibold text-[var(--bookish-ink)]'
+          : 'border-transparent font-medium text-[var(--bookish-muted)] hover:text-[var(--bookish-ink)]'
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
 export default function MemoryPanel({
@@ -73,56 +106,69 @@ export default function MemoryPanel({
     const artifactContentToDisplay = selectedPreviewItem.artifactContent
       ? formatContentForPreview(selectedPreviewItem.artifactContent)
       : '';
-    const fullContentToDisplay =
+    const fullContentToDisplay = normalizeMarkdownForDisplay(
       selectedPreviewItem.content +
-      (artifactContentToDisplay ? `\n\n---\n\n## Artifact Generated\n\n${artifactContentToDisplay}` : '');
+        (artifactContentToDisplay
+          ? `\n\n---\n\n## Artifact Generated\n\n${artifactContentToDisplay}`
+          : ''),
+    );
 
     return (
-      <div className="w-full h-full flex flex-col font-sans select-text relative">
-        <div className="flex justify-between items-center bg-white/95 backdrop-blur px-8 py-6 border-b border-zinc-100 select-none text-[10px] shrink-0 text-zinc-500 font-semibold uppercase tracking-widest z-10">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-zinc-700">{selectedPreviewItem.title}</span>
+      <div className="relative flex h-full w-full flex-col select-text">
+        <div className="z-10 flex shrink-0 items-center justify-between border-b border-[var(--bookish-line)] bg-[var(--bookish-paper)] px-6 py-4">
+          <div className="flex min-w-0 items-center gap-2 text-[11px] text-[var(--bookish-muted)]">
+            <span className="truncate font-semibold text-[var(--bookish-ink)]">
+              {selectedPreviewItem.title}
+            </span>
             {selectedPreviewItem.subtitle && (
               <>
-                <span>•</span>
-                <span>{selectedPreviewItem.subtitle}</span>
+                <span className="text-[var(--bookish-line)]">·</span>
+                <span className="truncate">{selectedPreviewItem.subtitle}</span>
               </>
             )}
           </div>
           <button
             type="button"
             onClick={() => setSelectedPreviewItem(null)}
-            className="text-zinc-400 hover:text-zinc-700 text-sm font-bold transition focus:outline-none cursor-pointer w-6 h-6 flex items-center justify-center rounded-full hover:bg-zinc-100"
-            title="Close Preview"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--bookish-muted)] transition hover:bg-black/[0.04] hover:text-[var(--bookish-ink)]"
+            title="Close preview"
           >
             ✕
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6 text-justify leading-relaxed markdown-body prose prose-sm prose-zinc max-w-none break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words">
+        <div className="markdown-body prose prose-sm prose-zinc max-w-none flex-1 overflow-y-auto break-words px-6 py-5 leading-relaxed [&_pre]:whitespace-pre-wrap [&_pre]:break-words">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
               p: ({ ...props }) => <p className="mb-3 text-[13px]" {...props} />,
-              h1: ({ ...props }) => <h1 className="text-lg font-bold my-3" {...props} />,
-              h2: ({ ...props }) => <h2 className="text-base font-bold my-3" {...props} />,
-              h3: ({ ...props }) => <h3 className="text-[14px] font-bold my-2" {...props} />,
-              ul: ({ ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-[13px]" {...props} />,
-              ol: ({ ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-[13px]" {...props} />,
+              h1: ({ ...props }) => <h1 className="my-4 text-lg font-bold" {...props} />,
+              h2: ({ ...props }) => <h2 className="my-3 text-base font-semibold" {...props} />,
+              h3: ({ ...props }) => <h3 className="my-3 text-[15px] font-semibold" {...props} />,
+              h4: ({ ...props }) => <h4 className="my-2 text-[14px] font-semibold" {...props} />,
+              ul: ({ ...props }) => (
+                <ul className="mb-3 list-disc space-y-1 pl-5 text-[13px]" {...props} />
+              ),
+              ol: ({ ...props }) => (
+                <ol className="mb-3 list-decimal space-y-1 pl-5 text-[13px]" {...props} />
+              ),
               li: ({ ...props }) => <li className="ml-3" {...props} />,
-              hr: ({ ...props }) => <hr className="my-4 border-zinc-200" {...props} />,
+              hr: ({ ...props }) => <hr className="my-4 border-[var(--bookish-line)]" {...props} />,
               strong: ({ ...props }) => <strong className="font-semibold" {...props} />,
               pre: ({ ...props }) => (
-                <pre className="text-[10px] bg-zinc-50/50 border border-zinc-100 rounded p-4" {...props} />
+                <pre
+                  className="rounded border border-[var(--bookish-line)] bg-[var(--bookish-page)] p-4 text-[10px]"
+                  {...props}
+                />
               ),
               code: ({ node, inline, ...props }: any) =>
                 inline ? (
                   <code
-                    className="text-[10px] bg-zinc-100 px-1 py-0.5 rounded text-indigo-600 font-mono"
+                    className="rounded bg-[var(--bookish-page)] px-1 py-0.5 font-mono text-[10px] text-[var(--bookish-accent)]"
                     {...props}
                   />
                 ) : (
-                  <code className="text-[10px] font-mono" {...props} />
+                  <code className="font-mono text-[10px]" {...props} />
                 ),
             }}
           >
@@ -134,68 +180,57 @@ export default function MemoryPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
-      <div className="h-12 border-b border-zinc-200 bg-zinc-50 px-6 flex items-center justify-between shrink-0 select-none">
-        <div className="flex gap-4 text-xs font-semibold text-zinc-400">
-          <button
-            type="button"
-            onClick={() => setMemorySubTab('Sources')}
-            className={`pb-3.5 pt-3.5 border-b-2 transition focus:outline-none cursor-pointer ${
-              memorySubTab === 'Sources'
-                ? 'border-zinc-900 text-zinc-900 font-semibold'
-                : 'border-transparent hover:text-zinc-600'
-            }`}
-          >
-            Sources
-          </button>
-          <button
-            type="button"
-            onClick={() => setMemorySubTab('Knowledge')}
-            className={`pb-3.5 pt-3.5 border-b-2 transition focus:outline-none cursor-pointer ${
-              memorySubTab === 'Knowledge'
-                ? 'border-zinc-900 text-zinc-900 font-semibold'
-                : 'border-transparent hover:text-zinc-600'
-            }`}
-          >
-            Project knowledge
-          </button>
-        </div>
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-[var(--bookish-paper)]">
+      <div
+        className={`flex min-h-0 flex-col overflow-hidden transition-all duration-300 ${
+          selectedPreviewItem ? 'w-[58%] border-r border-[var(--bookish-line)]' : 'w-full'
+        }`}
+      >
+        <div className="shrink-0 px-8 pt-8">
+          <header>
+            <h1 className="text-[15px] font-semibold tracking-tight text-[var(--bookish-ink)]">Memory</h1>
+            <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-[var(--bookish-muted)]">
+              {MEMORY_DESCRIPTION}
+            </p>
+          </header>
 
-        <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest font-sans">
-          Project memory
-        </div>
-      </div>
-
-      <div className="flex-1 flex overflow-hidden">
-        <div
-          className={`${selectedPreviewItem ? 'w-[60%]' : 'w-full'} border-r border-zinc-200 bg-zinc-50/30 flex flex-col overflow-hidden shrink-0 transition-all duration-300`}
-        >
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {memorySubTab === 'Sources' && (
-              <UserContextTimeline
-                book={book}
-                selectedPreviewItem={selectedPreviewItem}
-                setSelectedPreviewItem={setSelectedPreviewItem}
-                setIsAddAssetOpen={setIsAddAssetOpen}
+          <div className="mt-5 flex items-end gap-5">
+            {SUB_TABS.map((tab) => (
+              <MemorySubTabButton
+                key={tab.id}
+                active={memorySubTab === tab.id}
+                label={tab.label}
+                onClick={() => setMemorySubTab(tab.id)}
               />
-            )}
-
-            {memorySubTab === 'Knowledge' && (
-              <ProjectKnowledge
-                book={book}
-                selectedPreviewItem={selectedPreviewItem}
-                setSelectedPreviewItem={setSelectedPreviewItem}
-              />
-            )}
+            ))}
           </div>
         </div>
 
-        {selectedPreviewItem && (
-          <div className="w-[40%] bg-white flex flex-col shrink-0 border-l border-zinc-200 transition-all duration-300 animate-fade-in relative overflow-hidden">
-            {renderPreviewCanvasContent()}
-          </div>
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+          {memorySubTab === 'Sources' && (
+            <UserContextTimeline
+              book={book}
+              selectedPreviewItem={selectedPreviewItem}
+              setSelectedPreviewItem={setSelectedPreviewItem}
+              onAddSource={() => setIsAddAssetOpen(true)}
+            />
+          )}
+
+          {memorySubTab === 'Knowledge' && (
+            <ProjectKnowledge
+              book={book}
+              selectedPreviewItem={selectedPreviewItem}
+              setSelectedPreviewItem={setSelectedPreviewItem}
+            />
+          )}
+        </div>
       </div>
+
+      {selectedPreviewItem && (
+        <div className="flex w-[42%] shrink-0 flex-col overflow-hidden bg-[var(--bookish-paper)]">
+          {renderPreviewCanvasContent()}
+        </div>
+      )}
     </div>
   );
 }

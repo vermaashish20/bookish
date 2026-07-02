@@ -2,6 +2,10 @@
 
 import React from 'react';
 import {
+  markdownToPlainExcerpt,
+  normalizeMarkdownForDisplay,
+} from '@/lib/markdown/display';
+import {
   BookProject,
   CharacterItem,
   ChapterItem,
@@ -158,18 +162,22 @@ export default function ProjectKnowledge({
   };
 
   const openWorldPreview = (entity: WorldEntityItem) => {
+    const description = entity.description?.trim()
+      ? normalizeMarkdownForDisplay(entity.description)
+      : '_No description yet._';
+    const attributeBlock = formatAttributes(entity.attributes);
+    const hasAttributes =
+      Object.keys(entity.attributes ?? {}).length > 0 &&
+      attributeBlock !== '_No extra attributes recorded._';
+
     setSelectedPreviewItem({
       type: 'world_entity',
       id: entity.id,
       title: entity.name,
       subtitle: `${entityTypeLabel(entity.type)} · ${statusLabel(entity.status)}`,
-      content: [
-        `**Name:** ${entity.name}`,
-        `**Type:** ${entityTypeLabel(entity.type)}`,
-        `**Status:** ${statusLabel(entity.status)}`,
-        `\n**Description:**\n${entity.description || 'No description yet.'}`,
-        `\n**Attributes:**\n${formatAttributes(entity.attributes)}`,
-      ].join('\n\n'),
+      content: hasAttributes
+        ? `${description}\n\n---\n\n### Attributes\n\n${attributeBlock}`
+        : description,
     });
   };
 
@@ -194,14 +202,7 @@ export default function ProjectKnowledge({
   };
 
   return (
-    <div className="space-y-5 font-sans max-w-3xl">
-      <div>
-        <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Project knowledge</h3>
-        <p className="text-[10px] text-zinc-500 mt-0.5">
-          Approved canon and project voice — what agents use when planning and writing.
-        </p>
-      </div>
-
+    <div className="max-w-3xl space-y-5 font-sans">
       <button
         type="button"
         onClick={openVoicePreview}
@@ -280,7 +281,9 @@ export default function ProjectKnowledge({
                 {entityTypeLabel(entity.type)}
               </span>
               {entity.description && (
-                <p className="line-clamp-1 text-[11px] text-zinc-500 flex-1">{entity.description}</p>
+                <p className="line-clamp-2 text-[11px] text-zinc-500 flex-1">
+                  {markdownToPlainExcerpt(entity.description)}
+                </p>
               )}
             </div>
           </SelectableCard>

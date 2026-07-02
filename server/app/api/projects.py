@@ -3,20 +3,26 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.deps import get_current_user, require_owned_project
-from app.repositories.assets import add_user_asset
+from app.repositories.assets import add_user_asset, get_user_asset
+from app.repositories.chapters import get_chapter_by_id
 from app.repositories.projects import (
     DEFAULT_PROJECT_SETTINGS,
     create_project,
     delete_project,
-    get_all_projects,
     get_project,
+    get_project_book_section,
+    get_project_memory_section,
     get_project_settings,
+    get_project_shell,
     get_project_summary,
     get_unified_project_payload,
+    list_project_summaries,
     update_project_settings,
 )
 from app.repositories.artifacts import get_artifact
-from app.schemas import AssetUploadPayload, CreateProjectPayload, UpdateSettingsPayload
+from app.api.api import AssetUploadPayload, CreateProjectPayload
+from app.models import UpdateSettingsPayload
+from app.services.assets import parse_asset_file
 from app.repositories.chat_messages import (
     clear_chat_thread,
     create_chat_thread,
@@ -32,16 +38,8 @@ router = APIRouter(
 
 @router.get("")
 def fetch_projects(user_id: str = Depends(get_current_user)):
-    """
-    Fetch all projects for the authenticated user with lightweight summaries.
-    """
-    projects = get_all_projects(user_id)
-    result = []
-    for project in projects:
-        summary = get_project_summary(project["_id"])
-        if summary:
-            result.append(summary)
-    return result
+    """Fetch all projects for the authenticated user (list-optimized)."""
+    return list_project_summaries(user_id)
 
 
 @router.post("")
@@ -71,24 +69,56 @@ def register_project(payload: CreateProjectPayload, user_id: str = Depends(get_c
         settings=settings_dict,
         user_id=user_id,
     )
-    add_user_asset(
-        project_id=project_id,
-        name="Project Initial Brief",
-        asset_type="Prompt",
-        size=f"{max(round(len(payload.brief) / 1024, 1), 0.1)} KB",
-        added_at=created_at,
-        content=payload.brief,
-    )
+    if payload.brief.strip():
+        add_user_asset(
+            project_id=project_id,
+            name="Project Initial Brief",
+            asset_type="Prompt",
+            size=f"{max(round(len(payload.brief) / 1024, 1), 0.1)} KB",
+            added_at=created_at,
+            content=payload.brief.strip(),
+        )
     return get_unified_project_payload(project_id)
 
 
 @router.get("/{id}")
 def fetch_project_details(id: str, user_id: str = Depends(get_current_user)):
-    project = require_owned_project(id, user_id)  # noqa: F841
-    result = get_unified_project_payload(id)
+    """Workspace shell — title/metadata only. Tab data is loaded on demand."""
+    project = require_owned_project(id, user_id)
+    result = get_project_shell(id, project)
     if not result:
         raise HTTPException(status_code=404, detail="Book project not found.")
     return result
+
+
+@router.get("/{id}/book")
+def fetch_project_book(id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
+    return get_project_book_section(id)
+
+
+@router.get("/{id}/memory")
+def fetch_project_memory(id: str, user_id: str = Depends(get_current_user)):
+    project = require_owned_project(id, user_id)
+    return get_project_memory_section(id, project)
+
+
+@router.get("/{id}/chapters/{chapter_id}")
+def fetch_chapter(id: str, chapter_id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
+    chapter = get_chapter_by_id(id, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found.")
+    return chapter
+
+
+@router.get("/{id}/assets/{asset_id}")
+def fetch_asset(id: str, asset_id: str, user_id: str = Depends(get_current_user)):
+    require_owned_project(id, user_id)
+    asset = get_user_asset(asset_id)
+    if not asset or asset.get("projectId") != id:
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    return asset
 
 
 @router.get("/{id}/artifacts/{artifact_id}")

@@ -4,25 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchSettings, saveSettings } from '@/lib/api';
 import type { BookProject, LLMProvider, ModelConfig, ProjectSettings } from '@/lib/types';
 
-const DEFAULT_MODEL = 'mistralai/mistral-large-3-675b-instruct-2512';
+const NVIDIA_DEFAULT_MODEL = 'mistralai/mistral-large-3-675b-instruct-2512';
+const SARVAM_DEFAULT_MODEL = 'sarvam-105b';
 
 type ModelKey = keyof ProjectSettings;
 
-type CredentialsState = {
-  anthropicKey: string;
-  geminiKey: string;
-  openaiKey: string;
-  openrouterKey: string;
-  sarvamKey: string;
-  nvidiaKey: string;
-  ollamaEndpoint: string;
-  customEndpoint: string;
-  customApiKey: string;
-};
-
 const DEFAULT_CONFIG: ModelConfig = {
   provider: 'Nvidia',
-  modelName: DEFAULT_MODEL,
+  modelName: NVIDIA_DEFAULT_MODEL,
   apiKey: '',
   endpointUrl: '',
 };
@@ -33,24 +22,21 @@ const DEFAULT_SETTINGS: ProjectSettings = {
   worldBuilderModel: { ...DEFAULT_CONFIG },
 };
 
-const DEFAULT_CREDENTIALS: CredentialsState = {
-  anthropicKey: '',
-  geminiKey: '',
-  openaiKey: '',
-  openrouterKey: '',
-  sarvamKey: '',
-  nvidiaKey: '',
-  ollamaEndpoint: 'http://localhost:11434',
-  customEndpoint: '',
-  customApiKey: '',
-};
+function isSupportedProvider(provider?: string): provider is LLMProvider {
+  return provider === 'Nvidia' || provider === 'Sarvam';
+}
+
+function defaultModelForProvider(provider: LLMProvider): string {
+  return provider === 'Sarvam' ? SARVAM_DEFAULT_MODEL : NVIDIA_DEFAULT_MODEL;
+}
 
 function normalizeModelConfig(config?: Partial<ModelConfig>): ModelConfig {
+  const provider: LLMProvider = isSupportedProvider(config?.provider) ? config.provider : 'Nvidia';
   return {
-    provider: config?.provider ?? DEFAULT_CONFIG.provider,
-    modelName: config?.modelName ?? DEFAULT_CONFIG.modelName,
+    provider,
+    modelName: config?.modelName ?? defaultModelForProvider(provider),
     apiKey: config?.apiKey ?? '',
-    endpointUrl: config?.endpointUrl ?? '',
+    endpointUrl: '',
   };
 }
 
@@ -62,25 +48,6 @@ function normalizeSettings(settings?: Partial<ProjectSettings>): ProjectSettings
   };
 }
 
-function extractCredentials(settings: ProjectSettings): CredentialsState {
-  const credentials = { ...DEFAULT_CREDENTIALS };
-  const models = Object.values(settings);
-  for (const model of models) {
-    if (model.provider === 'Claude' && model.apiKey) credentials.anthropicKey = model.apiKey;
-    if (model.provider === 'Gemini' && model.apiKey) credentials.geminiKey = model.apiKey;
-    if (model.provider === 'OpenAI' && model.apiKey) credentials.openaiKey = model.apiKey;
-    if (model.provider === 'OpenRouter' && model.apiKey) credentials.openrouterKey = model.apiKey;
-    if (model.provider === 'Sarvam' && model.apiKey) credentials.sarvamKey = model.apiKey;
-    if (model.provider === 'Nvidia' && model.apiKey) credentials.nvidiaKey = model.apiKey;
-    if (model.provider === 'Ollama' && model.endpointUrl) credentials.ollamaEndpoint = model.endpointUrl;
-    if (model.provider === 'Custom') {
-      if (model.apiKey) credentials.customApiKey = model.apiKey;
-      if (model.endpointUrl) credentials.customEndpoint = model.endpointUrl;
-    }
-  }
-  return credentials;
-}
-
 export function useModelSettings(
   projectId: string,
   book: BookProject | null,
@@ -88,29 +55,24 @@ export function useModelSettings(
   settingsTabActive: boolean,
 ) {
   const [settings, setSettings] = useState<ProjectSettings>(DEFAULT_SETTINGS);
-  const [credentials, setCredentials] = useState<CredentialsState>(DEFAULT_CREDENTIALS);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   const applySettings = useCallback((incoming: Partial<ProjectSettings>) => {
-    const normalized = normalizeSettings(incoming);
-    setSettings(normalized);
-    setCredentials(extractCredentials(normalized));
+    setSettings(normalizeSettings(incoming));
   }, []);
 
-  const updateModelConfig = useCallback(
-    (key: ModelKey, patch: Partial<ModelConfig>) => {
-      setSettings((current) => ({
-        ...current,
-        [key]: {
-          ...current[key],
-          ...patch,
-        },
-      }));
-      setSettingsSaved(false);
-    },
-    [],
-  );
+  const updateModelConfig = useCallback((key: ModelKey, patch: Partial<ModelConfig>) => {
+    setSettings((current) => {
+      const next = { ...current[key], ...patch };
+      if (patch.provider && patch.provider !== current[key].provider) {
+        if (!patch.modelName) next.modelName = defaultModelForProvider(patch.provider);
+        if (patch.apiKey === undefined) next.apiKey = '';
+      }
+      return { ...current, [key]: next };
+    });
+    setSettingsSaved(false);
+  }, []);
 
   useEffect(() => {
     if (book?.settings) {
@@ -125,35 +87,7 @@ export function useModelSettings(
       .catch((err) => console.error('Failed to load settings', err));
   }, [settingsTabActive, projectId, applySettings]);
 
-  const buildSettings = useCallback((): ProjectSettings => {
-    const resolveKey = (provider: LLMProvider) => {
-      switch (provider) {
-        case 'Claude': return credentials.anthropicKey;
-        case 'Gemini': return credentials.geminiKey;
-        case 'OpenAI': return credentials.openaiKey;
-        case 'OpenRouter': return credentials.openrouterKey;
-        case 'Sarvam': return credentials.sarvamKey;
-        case 'Nvidia': return credentials.nvidiaKey;
-        case 'Custom': return credentials.customApiKey;
-        default: return '';
-      }
-    };
-    const resolveEndpoint = (provider: LLMProvider) => {
-      if (provider === 'Ollama') return credentials.ollamaEndpoint;
-      if (provider === 'Custom') return credentials.customEndpoint;
-      return '';
-    };
-    const withCredential = (config: ModelConfig): ModelConfig => ({
-      ...config,
-      apiKey: resolveKey(config.provider),
-      endpointUrl: resolveEndpoint(config.provider),
-    });
-    return {
-      plannerModel: withCredential(settings.plannerModel),
-      writerModel: withCredential(settings.writerModel),
-      worldBuilderModel: withCredential(settings.worldBuilderModel),
-    };
-  }, [credentials, settings]);
+  const buildSettings = useCallback((): ProjectSettings => normalizeSettings(settings), [settings]);
 
   const save = useCallback(async () => {
     if (!book) return;
@@ -179,59 +113,21 @@ export function useModelSettings(
     setPlannerProvider: (provider: LLMProvider) => updateModelConfig('plannerModel', { provider }),
     plannerModel: settings.plannerModel.modelName,
     setPlannerModel: (modelName: string) => updateModelConfig('plannerModel', { modelName }),
+    plannerApiKey: settings.plannerModel.apiKey ?? '',
+    setPlannerApiKey: (apiKey: string) => updateModelConfig('plannerModel', { apiKey }),
     writerProvider: settings.writerModel.provider,
     setWriterProvider: (provider: LLMProvider) => updateModelConfig('writerModel', { provider }),
     writerModel: settings.writerModel.modelName,
     setWriterModel: (modelName: string) => updateModelConfig('writerModel', { modelName }),
+    writerApiKey: settings.writerModel.apiKey ?? '',
+    setWriterApiKey: (apiKey: string) => updateModelConfig('writerModel', { apiKey }),
     worldBuilderProvider: settings.worldBuilderModel.provider,
-    setWorldBuilderProvider: (provider: LLMProvider) => updateModelConfig('worldBuilderModel', { provider }),
+    setWorldBuilderProvider: (provider: LLMProvider) =>
+      updateModelConfig('worldBuilderModel', { provider }),
     worldBuilderModel: settings.worldBuilderModel.modelName,
     setWorldBuilderModel: (modelName: string) => updateModelConfig('worldBuilderModel', { modelName }),
-    anthropicKey: credentials.anthropicKey,
-    setAnthropicKey: (anthropicKey: string) => {
-      setCredentials((current) => ({ ...current, anthropicKey }));
-      setSettingsSaved(false);
-    },
-    geminiKey: credentials.geminiKey,
-    setGeminiKey: (geminiKey: string) => {
-      setCredentials((current) => ({ ...current, geminiKey }));
-      setSettingsSaved(false);
-    },
-    openaiKey: credentials.openaiKey,
-    setOpenaiKey: (openaiKey: string) => {
-      setCredentials((current) => ({ ...current, openaiKey }));
-      setSettingsSaved(false);
-    },
-    openrouterKey: credentials.openrouterKey,
-    setOpenrouterKey: (openrouterKey: string) => {
-      setCredentials((current) => ({ ...current, openrouterKey }));
-      setSettingsSaved(false);
-    },
-    sarvamKey: credentials.sarvamKey,
-    setSarvamKey: (sarvamKey: string) => {
-      setCredentials((current) => ({ ...current, sarvamKey }));
-      setSettingsSaved(false);
-    },
-    nvidiaKey: credentials.nvidiaKey,
-    setNvidiaKey: (nvidiaKey: string) => {
-      setCredentials((current) => ({ ...current, nvidiaKey }));
-      setSettingsSaved(false);
-    },
-    ollamaEndpoint: credentials.ollamaEndpoint,
-    setOllamaEndpoint: (ollamaEndpoint: string) => {
-      setCredentials((current) => ({ ...current, ollamaEndpoint }));
-      setSettingsSaved(false);
-    },
-    customEndpoint: credentials.customEndpoint,
-    setCustomEndpoint: (customEndpoint: string) => {
-      setCredentials((current) => ({ ...current, customEndpoint }));
-      setSettingsSaved(false);
-    },
-    customApiKey: credentials.customApiKey,
-    setCustomApiKey: (customApiKey: string) => {
-      setCredentials((current) => ({ ...current, customApiKey }));
-      setSettingsSaved(false);
-    },
+    worldBuilderApiKey: settings.worldBuilderModel.apiKey ?? '',
+    setWorldBuilderApiKey: (apiKey: string) => updateModelConfig('worldBuilderModel', { apiKey }),
     isSavingSettings,
     settingsSaved,
     saveSettings: save,

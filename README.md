@@ -6,6 +6,36 @@ Monorepo: **Next.js 16** workspace UI + **FastAPI / LangGraph** backend with **M
 
 ---
 
+## Screenshots
+
+### Workspace
+
+Your projects at a glance — open a book, start a new one, or browse the community shelf.
+
+![Bookish workspace](./images/b_workspace.png)
+
+### Agent
+
+Chat with the planner and specialists. Ask for plot ideas, character suggestions, or a recap of the story so far.
+
+![Agent chat — plot planning](./images/b_plan-plot.png)
+
+![Agent chat — story summary across sessions](./images/b_multi-session.png)
+
+### Book
+
+Structured manuscript view with front matter, chapters, and back matter.
+
+![Book tab — chapters and manuscript](./images/b_chapters.png)
+
+### Memory
+
+Upload sources and browse approved project knowledge — the context agents use when planning and writing.
+
+![Memory tab — sources and preview](./images/b_user-inital-sources.png)
+
+---
+
 ## Tech Stack
 
 | Layer | Technologies |
@@ -165,14 +195,48 @@ Use [ngrok](https://ngrok.com/) for local development: `ngrok http 8000`
 
 ## Development
 
-```bash
-# Reindex vectors after data migration
-cd server
-uv run python scripts/reindex.py project_<id>
+### Run locally
 
+After [Quick Start](#quick-start) env files are in place, start MongoDB, then run the API and UI in **two terminals**:
+
+**Terminal 1 — API**
+
+```bash
+cd server
+uv sync                    # first run, or after pulling dependency changes
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — UI**
+
+```bash
+cd client
+npm install                # first run, or after pulling dependency changes
+npm run dev
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend | [http://localhost:3000](http://localhost:3000) |
+| API | [http://localhost:8000](http://localhost:8000) |
+| API docs | [http://localhost:8000/docs](http://localhost:8000/docs) |
+
+Sign in via Clerk, then open **Workspace** to create or open a project. Agent runs stream over SSE; project data is stored in MongoDB and indexed into Chroma on write.
+
+### Common tasks
+
+```bash
 # Lint frontend
 cd client
 npm run lint
+
+# Production build (frontend)
+cd client
+npm run build
+
+# Reindex Chroma vectors after a data migration or manual DB edits
+cd server
+uv run python scripts/reindex.py <project_id>
 ```
 
-Defaults: API `127.0.0.1:8000` · UI `localhost:3000` · Chroma `server/chroma_db/` (gitignored)
+**Defaults:** API `127.0.0.1:8000` · UI `localhost:3000` · Chroma data `server/chroma_db/` (gitignored)

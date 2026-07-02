@@ -1,282 +1,245 @@
 'use client';
 
 import React from 'react';
-
-type ProviderType = 'Ollama' | 'Gemini' | 'Claude' | 'OpenAI' | 'OpenRouter' | 'Sarvam' | 'Nvidia' | 'Custom';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { LLMProvider } from '@/lib/types';
 
 interface SettingsPanelProps {
-  plannerProvider: ProviderType;
-  setPlannerProvider: (value: ProviderType) => void;
+  plannerProvider: LLMProvider;
+  setPlannerProvider: (value: LLMProvider) => void;
   plannerModel: string;
   setPlannerModel: (value: string) => void;
-  writerProvider: ProviderType;
-  setWriterProvider: (value: ProviderType) => void;
+  plannerApiKey: string;
+  setPlannerApiKey: (value: string) => void;
+  writerProvider: LLMProvider;
+  setWriterProvider: (value: LLMProvider) => void;
   writerModel: string;
   setWriterModel: (value: string) => void;
-  worldBuilderProvider: ProviderType;
-  setWorldBuilderProvider: (value: ProviderType) => void;
+  writerApiKey: string;
+  setWriterApiKey: (value: string) => void;
+  worldBuilderProvider: LLMProvider;
+  setWorldBuilderProvider: (value: LLMProvider) => void;
   worldBuilderModel: string;
   setWorldBuilderModel: (value: string) => void;
-  anthropicKey: string;
-  setAnthropicKey: (value: string) => void;
-  geminiKey: string;
-  setGeminiKey: (value: string) => void;
-  openaiKey: string;
-  setOpenaiKey: (value: string) => void;
-  openrouterKey: string;
-  setOpenrouterKey: (value: string) => void;
-  sarvamKey: string;
-  setSarvamKey: (value: string) => void;
-  nvidiaKey: string;
-  setNvidiaKey: (value: string) => void;
-  ollamaEndpoint: string;
-  setOllamaEndpoint: (value: string) => void;
-  customEndpoint: string;
-  setCustomEndpoint: (value: string) => void;
-  customApiKey: string;
-  setCustomApiKey: (value: string) => void;
+  worldBuilderApiKey: string;
+  setWorldBuilderApiKey: (value: string) => void;
   isSavingSettings: boolean;
   settingsSaved: boolean;
   onSaveSettings: () => void;
 }
 
-export default function SettingsPanel(props: SettingsPanelProps) {
+const cellInputClass =
+  'w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-1 text-[13px] text-[var(--bookish-ink)] outline-none transition placeholder:text-[var(--bookish-muted)]/70 hover:border-[var(--bookish-line)] focus:border-[var(--bookish-line)] focus:bg-white';
+
+const cellMonoClass = `${cellInputClass} font-mono text-[12px]`;
+
+const PROVIDER_OPTIONS: { value: LLMProvider; label: string }[] = [
+  { value: 'Nvidia', label: 'NVIDIA NIM' },
+  { value: 'Sarvam', label: 'Sarvam AI' },
+];
+
+function ProviderSelect({
+  value,
+  onChange,
+}: {
+  value: LLMProvider;
+  onChange: (value: LLMProvider) => void;
+}) {
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-zinc-50 flex flex-col items-center">
-      <div className="w-full max-w-2xl space-y-6 font-sans">
-        <div>
-          <h2 className="text-sm font-bold text-zinc-950 uppercase tracking-wide">Model Routing Settings</h2>
-          <p className="text-[10px] text-zinc-500 mt-1">Configure orchestration providers and credentials for planner, writer, and world builder agents.</p>
+    <Select value={value} onValueChange={(next) => onChange(next as LLMProvider)}>
+      <SelectTrigger
+        size="sm"
+        className="h-8 w-full min-w-0 rounded border border-transparent bg-transparent px-1.5 text-[13px] text-[var(--bookish-ink)] shadow-none transition hover:border-[var(--bookish-line)] focus-visible:border-[var(--bookish-line)] focus-visible:bg-white focus-visible:ring-[3px] focus-visible:ring-[rgb(5_150_105/0.08)] data-[size=sm]:h-8"
+      >
+        <SelectValue placeholder="Select provider" />
+      </SelectTrigger>
+      <SelectContent
+        position="popper"
+        sideOffset={4}
+        align="start"
+        className="min-w-[10rem] rounded-lg border-[var(--bookish-line)] bg-white p-1 shadow-lg"
+      >
+        {PROVIDER_OPTIONS.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className="rounded-md py-1.5 pr-8 pl-2.5 text-[13px] text-[var(--bookish-ink)] focus:bg-[var(--bookish-accent-soft)] focus:text-[var(--bookish-accent)]"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function modelPlaceholder(provider: LLMProvider): string {
+  return provider === 'Sarvam'
+    ? 'sarvam-105b'
+    : 'mistralai/mistral-large-3-675b-instruct-2512';
+}
+
+function apiKeyPlaceholder(provider: LLMProvider): string {
+  return provider === 'Sarvam' ? 'Optional' : 'nvapi-…';
+}
+
+type AgentRowConfig = {
+  name: string;
+  role: string;
+  provider: LLMProvider;
+  onProviderChange: (value: LLMProvider) => void;
+  model: string;
+  onModelChange: (value: string) => void;
+  apiKey: string;
+  onApiKeyChange: (value: string) => void;
+};
+
+function AgentTableRow({
+  name,
+  role,
+  provider,
+  onProviderChange,
+  model,
+  onModelChange,
+  apiKey,
+  onApiKeyChange,
+}: AgentRowConfig) {
+  return (
+    <tr className="border-b border-[var(--bookish-line)] last:border-b-0">
+      <td className="px-4 py-3 align-middle">
+        <p className="font-medium text-[var(--bookish-ink)]">{name}</p>
+        <p className="mt-0.5 text-[11px] text-[var(--bookish-muted)]">{role}</p>
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <ProviderSelect value={provider} onChange={onProviderChange} />
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <input
+          type="text"
+          placeholder={modelPlaceholder(provider)}
+          value={model}
+          onChange={(e) => onModelChange(e.target.value)}
+          className={cellMonoClass}
+        />
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <input
+          type="password"
+          placeholder={apiKeyPlaceholder(provider)}
+          value={apiKey}
+          onChange={(e) => onApiKeyChange(e.target.value)}
+          className={cellMonoClass}
+        />
+      </td>
+    </tr>
+  );
+}
+
+export default function SettingsPanel(props: SettingsPanelProps) {
+  const rows: AgentRowConfig[] = [
+    {
+      name: 'Planner',
+      role: 'Orchestration and task routing',
+      provider: props.plannerProvider,
+      onProviderChange: props.setPlannerProvider,
+      model: props.plannerModel,
+      onModelChange: props.setPlannerModel,
+      apiKey: props.plannerApiKey,
+      onApiKeyChange: props.setPlannerApiKey,
+    },
+    {
+      name: 'Writer',
+      role: 'Drafts, revisions, and polish',
+      provider: props.writerProvider,
+      onProviderChange: props.setWriterProvider,
+      model: props.writerModel,
+      onModelChange: props.setWriterModel,
+      apiKey: props.writerApiKey,
+      onApiKeyChange: props.setWriterApiKey,
+    },
+    {
+      name: 'World builder',
+      role: 'Lore, characters, and canon',
+      provider: props.worldBuilderProvider,
+      onProviderChange: props.setWorldBuilderProvider,
+      model: props.worldBuilderModel,
+      onModelChange: props.setWorldBuilderModel,
+      apiKey: props.worldBuilderApiKey,
+      onApiKeyChange: props.setWorldBuilderApiKey,
+    },
+  ];
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-[var(--bookish-paper)]">
+      <div className="max-w-6xl px-8 py-8">
+        <header className="mb-5">
+          <h1 className="text-[15px] font-semibold tracking-tight text-[var(--bookish-ink)]">
+            Model routing
+          </h1>
+          <p className="mt-1 text-[12px] text-[var(--bookish-muted)]">
+            Set provider, model, and API key per agent. Leave keys blank to use server env vars.
+          </p>
+        </header>
+
+        <div className="overflow-hidden rounded-lg border border-[var(--bookish-line)]">
+          <table className="w-full table-fixed text-left">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[18%]" />
+              <col className="w-[32%]" />
+              <col className="w-[28%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-[var(--bookish-line)] bg-[#f4f4f5]">
+                <th className="px-4 py-2 text-[11px] font-semibold text-[var(--bookish-muted)]">
+                  Agent
+                </th>
+                <th className="px-4 py-2 text-[11px] font-semibold text-[var(--bookish-muted)]">
+                  Provider
+                </th>
+                <th className="px-4 py-2 text-[11px] font-semibold text-[var(--bookish-muted)]">
+                  Model
+                </th>
+                <th className="px-4 py-2 text-[11px] font-semibold text-[var(--bookish-muted)]">
+                  API key
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-[var(--bookish-paper)]">
+              {rows.map((row) => (
+                <AgentTableRow key={row.name} {...row} />
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-5">
-          <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">LLM Router Assignments</h3>
-
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Planner Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">VectorDB: R | MongoDB: R | LLM: ✓</p>
-            </div>
-            <select
-              value={props.plannerProvider}
-              onChange={(e) => props.setPlannerProvider(e.target.value as ProviderType)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.plannerModel}
-              onChange={(e) => props.setPlannerModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">Writer Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">Drafts, revisions, polish | VectorDB: R/W | MongoDB: R/W</p>
-            </div>
-            <select
-              value={props.writerProvider}
-              onChange={(e) => props.setWriterProvider(e.target.value as ProviderType)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.writerModel}
-              onChange={(e) => props.setWriterModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3 items-start">
-            <div>
-              <span className="text-xs font-semibold text-zinc-700">World Builder Agent Node</span>
-              <p className="text-[9px] text-zinc-400 mt-0.5">Lore and canon | VectorDB: W | MongoDB: R/W</p>
-            </div>
-            <select
-              value={props.worldBuilderProvider}
-              onChange={(e) => props.setWorldBuilderProvider(e.target.value as ProviderType)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="Claude">Anthropic Claude</option>
-              <option value="Gemini">Google Gemini</option>
-              <option value="OpenAI">OpenAI GPT-4</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="Sarvam">Sarvam AI</option>
-              <option value="Nvidia">NVIDIA NIM</option>
-              <option value="Ollama">Ollama (Localhost)</option>
-              <option value="Custom">Custom Endpoint</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Model Name"
-              value={props.worldBuilderModel}
-              onChange={(e) => props.setWorldBuilderModel(e.target.value)}
-              className="rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="pt-2 border-t border-zinc-100">
-            <p className="text-[9px] text-zinc-400">
-              <span className="font-semibold">Capabilities:</span> R = Read, W = Write, ✓ = LLM Call
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold text-zinc-800 border-b border-zinc-100 pb-2 uppercase tracking-wide">Credentials & Connection Endpoints</h3>
-
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-zinc-400 uppercase">Anthropic API Key</label>
-            <input
-              type="password"
-              placeholder="sk-ant-..."
-              value={props.anthropicKey}
-              onChange={(e) => props.setAnthropicKey(e.target.value)}
-              className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-zinc-400 uppercase">Google Gemini API Key</label>
-            <input
-              type="password"
-              placeholder="AIzaSy..."
-              value={props.geminiKey}
-              onChange={(e) => props.setGeminiKey(e.target.value)}
-              className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-zinc-400 uppercase">OpenAI API Key</label>
-            <input
-              type="password"
-              placeholder="sk-proj-..."
-              value={props.openaiKey}
-              onChange={(e) => props.setOpenaiKey(e.target.value)}
-              className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="space-y-1.5 rounded-md border border-violet-100 bg-violet-50/50 p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-              <label className="text-[9px] font-bold text-violet-700 uppercase tracking-wider">OpenRouter API Key</label>
-              <span className="text-[8px] text-violet-500 font-mono bg-violet-100 px-1 py-0.5 rounded">openrouter.ai</span>
-            </div>
-            <input
-              type="password"
-              placeholder="sk-or-v1-..."
-              value={props.openrouterKey}
-              onChange={(e) => props.setOpenrouterKey(e.target.value)}
-              className="w-full rounded border border-violet-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-violet-400"
-            />
-            <p className="text-[9px] text-violet-600 mt-1">Example model: <span className="font-mono">openai/gpt-4o-mini</span></p>
-          </div>
-
-          <div className="space-y-1.5 rounded-md border border-orange-100 bg-orange-50/50 p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-              <label className="text-[9px] font-bold text-orange-700 uppercase tracking-wider">Sarvam API Key</label>
-              <span className="text-[8px] text-orange-500 font-mono bg-orange-100 px-1 py-0.5 rounded">api.sarvam.ai</span>
-            </div>
-            <input
-              type="password"
-              placeholder="Sarvam API token"
-              value={props.sarvamKey}
-              onChange={(e) => props.setSarvamKey(e.target.value)}
-              className="w-full rounded border border-orange-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-orange-400"
-            />
-            <p className="text-[9px] text-orange-600 mt-1">Default model: <span className="font-mono">sarvam-105b</span></p>
-          </div>
-          
-          <div className="space-y-1.5 rounded-md border border-green-100 bg-green-50/50 p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <label className="text-[9px] font-bold text-green-700 uppercase tracking-wider">NVIDIA NIM API Key</label>
-              <span className="text-[8px] text-green-500 font-mono bg-green-100 px-1 py-0.5 rounded">integrate.api.nvidia.com</span>
-            </div>
-            <input
-              type="password"
-              placeholder="nvapi-..."
-              value={props.nvidiaKey}
-              onChange={(e) => props.setNvidiaKey(e.target.value)}
-              className="w-full rounded border border-green-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-green-400"
-            />
-            <p className="text-[9px] text-green-600 mt-1">Default model: <span className="font-mono">mistralai/mistral-large-3-675b-instruct-2512</span></p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-bold text-zinc-400 uppercase">Ollama Local API Endpoint</label>
-            <input
-              type="text"
-              placeholder="http://localhost:11434"
-              value={props.ollamaEndpoint}
-              onChange={(e) => props.setOllamaEndpoint(e.target.value)}
-              className="w-full rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-          
-          <div className="space-y-2 rounded-md border border-indigo-100 bg-indigo-50/40 p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              <label className="text-[9px] font-bold text-indigo-700 uppercase tracking-wider">Custom LLM Endpoint</label>
-              <span className="text-[8px] text-indigo-400 font-mono bg-indigo-100 px-1 py-0.5 rounded">OpenAI-compatible</span>
-            </div>
-            <input
-              type="text"
-              placeholder="https://your-llm-host.com/v1"
-              value={props.customEndpoint}
-              onChange={(e) => props.setCustomEndpoint(e.target.value)}
-              className="w-full rounded border border-indigo-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-indigo-400"
-            />
-            <input
-              type="password"
-              placeholder="Bearer token / API key for custom endpoint"
-              value={props.customApiKey}
-              onChange={(e) => props.setCustomApiKey(e.target.value)}
-              className="w-full rounded border border-indigo-200 bg-white px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:border-indigo-400"
-            />
-            <p className="text-[9px] text-indigo-500">Any OpenAI-compatible API - LM Studio, vLLM, Together AI, Groq, etc.</p>
-          </div>
-
-          <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-3">
-            <button
-              onClick={props.onSaveSettings}
-              disabled={props.isSavingSettings}
-              className={`rounded px-4 py-2 text-xs font-semibold text-white transition shadow-sm w-full flex items-center justify-center gap-2 ${
-                props.settingsSaved
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-zinc-950 hover:bg-zinc-800'
-              } disabled:opacity-60`}
-            >
-              {props.isSavingSettings && (
-                <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              )}
-              {props.settingsSaved ? 'Configuration Saved' : props.isSavingSettings ? 'Saving...' : 'Save Configuration Settings'}
-            </button>
-          </div>
+        <div className="mt-5 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={props.onSaveSettings}
+            disabled={props.isSavingSettings}
+            className={`workspace-btn workspace-btn--primary min-w-[10rem] ${
+              props.settingsSaved ? 'bg-emerald-700 hover:bg-emerald-800' : ''
+            }`}
+          >
+            {props.isSavingSettings && (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            )}
+            {props.settingsSaved
+              ? 'Saved'
+              : props.isSavingSettings
+                ? 'Saving…'
+                : 'Save configuration'}
+          </button>
+          {props.settingsSaved && (
+            <span className="text-[12px] text-[var(--bookish-muted)]">Changes applied to this project.</span>
+          )}
         </div>
       </div>
     </div>

@@ -27,6 +27,7 @@ export function useAgentStream(
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setBook: React.Dispatch<React.SetStateAction<BookProject | null>>,
   activeChatSessionId: string | null,
+  startNewChatSession?: () => Promise<string | void>,
 ) {
   const [promptInput, setPromptInput] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
@@ -178,7 +179,13 @@ export function useAgentStream(
   const sendPrompt = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (!book || !promptInput.trim() || !activeChatSessionId) return;
+      if (!book || !promptInput.trim()) return;
+
+      let sessionId = activeChatSessionId;
+      if (!sessionId && startNewChatSession) {
+        sessionId = (await startNewChatSession()) ?? null;
+      }
+      if (!sessionId) return;
 
       const captured = promptInput.trim();
       const userMessage: ChatMessage = {
@@ -209,7 +216,7 @@ export function useAgentStream(
       setIsAgentThinking(true);
 
       try {
-        let threadId = activeChatSessionId;
+        let threadId = sessionId;
         if (!threadId) {
           const thread = await createAgentThread(book.id);
           threadId = thread.threadId;
@@ -237,6 +244,7 @@ export function useAgentStream(
       promptInput,
       resetStreamBuffers,
       setChatMessages,
+      startNewChatSession,
       updateAssistantMessage,
     ],
   );

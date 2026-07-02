@@ -6,10 +6,7 @@ https://docs.langchain.com/oss/python/langgraph/event-streaming
 """
 from __future__ import annotations
 
-import logging
 from typing import Any
-
-logger = logging.getLogger(__name__)
 
 
 def emit_custom(kind: str, **payload: Any) -> None:
@@ -19,6 +16,5 @@ def emit_custom(kind: str, **payload: Any) -> None:
 
         writer = get_stream_writer()
         writer({"kind": kind, **payload})
-    except Exception as exc:
-        logger.debug("No LangGraph custom stream writer available for %s: %s", kind, exc)
-
+    except Exception:
+        pass

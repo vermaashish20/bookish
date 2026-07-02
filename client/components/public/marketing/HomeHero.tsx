@@ -1,75 +1,53 @@
 'use client';
 
-import Link from 'next/link';
-import { FormEvent, useMemo } from 'react';
+import { FormEvent } from 'react';
 import { Sparkles, Wand2 } from 'lucide-react';
 
 interface HomeHeroProps {
   prompt: string;
   onPromptChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
-  isAuthenticated: boolean;
-  username?: string;
   promptChips: string[];
   onChipClick: (chip: string) => void;
-}
-
-function timeGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
 }
 
 export function HomeHero({
   prompt,
   onPromptChange,
   onSubmit,
-  isAuthenticated,
-  username,
   promptChips,
   onChipClick,
 }: HomeHeroProps) {
-  const greeting = useMemo(() => timeGreeting(), []);
-  const displayName = username
-    ? username.charAt(0).toUpperCase() + username.slice(1)
-    : '';
-
   return (
-    <section className={`relative overflow-hidden bg-white text-center ${isAuthenticated ? 'pt-40 pb-16' : 'pt-36 pb-24'}`}>
-      {/* Radial magic glow */}
+    <section className="relative flex min-h-screen flex-col justify-center overflow-hidden pt-16 pb-24 text-center">
+      {/* Fantasy world background image */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-0 bg-cover bg-bottom"
+        style={{ backgroundImage: 'url(/hero-bg-full-size.png)' }}
+      />
+
+      {/* Soft white glow behind text for readability */}
       <div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
           background:
-            'radial-gradient(circle at 50% 30%, rgba(5, 150, 105, 0.06) 0%, transparent 60%), radial-gradient(circle at 70% 50%, rgba(13, 148, 136, 0.04) 0%, transparent 50%)',
+            'radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 35%, transparent 65%)',
         }}
       />
 
       <div className="bookish-wrap relative z-10 flex flex-col items-center">
-        {/* Heading — personalised when logged in */}
-        {isAuthenticated && displayName ? (
-          <h1 className="bookish-fade max-w-[820px] text-[clamp(2rem,3.2vw,2.8rem)] leading-[1.15] tracking-tight font-medium mb-10">
-            {greeting},{' '}
-            <em className="not-italic text-[var(--bookish-accent)] italic">{displayName}.</em>
-          </h1>
-        ) : (
-          <>
-            <h1 className="bookish-fade max-w-[820px] text-[clamp(3.5rem,6.2vw,6rem)] leading-[1.05] tracking-tight font-medium mb-6 drop-shadow-sm">
-              Your story deserves{' '}
-              <em className="not-italic text-[var(--bookish-accent)] italic">to be written.</em>
-            </h1>
+        <h1 className="bookish-fade mb-6 max-w-[820px] text-[clamp(3.5rem,6.2vw,6rem)] font-medium leading-[1.05] tracking-tight drop-shadow-sm">
+          Your story deserves{' '}
+          <em className="not-italic italic text-[var(--bookish-accent)]">to be written.</em>
+        </h1>
 
-            {/* Subtitle — only when logged out */}
-            <p
-              className="bookish-fade text-[var(--bookish-muted)] text-lg md:text-xl max-w-[58ch] leading-relaxed mb-12"
-              style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
-            >
-              A magical workspace where your ideas become legendary manuscripts. You direct the lore,
-              characters, and plot. Bookish agents flawlessly write the chapters.
-            </p>
-          </>
-        )}
+        <p
+          className="bookish-fade mb-12 max-w-[58ch] text-lg font-semibold leading-relaxed text-[var(--bookish-ink)] drop-shadow-md md:text-xl"
+          style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
+        >
+          A magical workspace where your ideas become legendary manuscripts. You direct the lore,
+          characters, and plot. Bookish agents flawlessly write the chapters.
+        </p>
 
         {/* Glowing pill search bar */}
         <div className="w-full max-w-[820px] relative group">
@@ -89,7 +67,7 @@ export function HomeHero({
                 placeholder="A tale of a forgotten elven king who seeks vengeance..."
                 value={prompt}
                 onChange={(e) => onPromptChange(e.target.value)}
-                className="flex-1 min-w-0 border-0 bg-transparent px-5 py-3.5 text-base md:text-lg text-[var(--bookish-ink)] outline-none"
+                className="flex-1 min-w-0 border-0 bg-transparent px-5 py-3.5 text-base md:text-lg font-medium text-[var(--bookish-ink)] placeholder-[var(--bookish-muted)] outline-none"
                 style={{ fontFamily: 'var(--font-cormorant), Georgia, serif', fontStyle: 'italic' }}
               />
               <button type="submit" className="bookish-cta m-2 flex items-center gap-2 shrink-0">
@@ -116,17 +94,7 @@ export function HomeHero({
           ))}
         </div>
 
-        {/* Browse public books — logged-out only */}
-        {!isAuthenticated && (
-          <div className="bookish-fade mt-8">
-            <Link
-              href="/explore"
-              className="inline-flex items-center gap-2 text-[var(--bookish-accent)] hover:text-[var(--bookish-accent-hover)] transition-colors border-b border-[color:var(--bookish-accent)]/30 hover:border-[color:var(--bookish-accent)] pb-0.5 text-sm font-medium uppercase tracking-widest"
-            >
-              Browse the Grand Library <span aria-hidden>→</span>
-            </Link>
-          </div>
-        )}
+
       </div>
     </section>
   );

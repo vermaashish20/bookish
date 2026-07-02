@@ -9,7 +9,6 @@ MongoDB remains source of truth; vectors are indexed on write via services.index
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, Dict, List, Optional
 
 import chromadb
@@ -30,7 +29,6 @@ def get_client() -> chromadb.PersistentClient:
     global _client
     if _client is None:
         _client = chromadb.PersistentClient(path=CHROMA_DIR)
-        logger.info("Chroma persistent client at %s", CHROMA_DIR)
     return _client
 
 
@@ -75,7 +73,6 @@ def upsert_document(
     """Insert or update one embedded document."""
     text = (document or "").strip()
     if not text:
-        logger.debug("Skip empty vector upsert for %s", doc_id)
         return
 
     project_id = metadata.get("projectId")
@@ -87,37 +84,17 @@ def upsert_document(
         "projectId": str(project_id),
     })
 
-    logger.info(
-        "[VectorIngestion] received collection=%s doc_id=%s project_id=%s sourceKind=%s chars=%s",
-        collection_name,
-        doc_id,
-        project_id,
-        meta.get("sourceKind", "unknown"),
-        len(text),
-    )
-    start = time.perf_counter()
     try:
         get_collection(collection_name).upsert(
             ids=[str(doc_id)],
             documents=[text],
             metadatas=[meta],
         )
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        logger.info(
-            "[VectorIngestion] completed collection=%s doc_id=%s project_id=%s elapsed_ms=%.1f",
-            collection_name,
-            doc_id,
-            project_id,
-            elapsed_ms,
-        )
     except Exception as exc:
-        elapsed_ms = (time.perf_counter() - start) * 1000
         logger.error(
-            "[VectorIngestion] failed collection=%s doc_id=%s project_id=%s elapsed_ms=%.1f error=%s",
+            "Vector upsert failed collection=%s doc_id=%s: %s",
             collection_name,
             doc_id,
-            project_id,
-            elapsed_ms,
             exc,
         )
 

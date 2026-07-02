@@ -78,15 +78,7 @@ export interface MemoryState {
   worldEntities: WorldEntityItem[];
 }
 
-export type LLMProvider =
-  | 'Ollama'
-  | 'Gemini'
-  | 'Claude'
-  | 'OpenAI'
-  | 'OpenRouter'
-  | 'Sarvam'
-  | 'Nvidia'
-  | 'Custom';
+export type LLMProvider = 'Nvidia' | 'Sarvam';
 
 export interface ModelConfig {
   provider: LLMProvider;
@@ -120,6 +112,7 @@ export interface BookProject {
   settings?: ProjectSettings;
   chapterCount?: number;
   publishedChapterCount?: number;
+  assetCount?: number;
 }
 
 export interface ChatMessage {

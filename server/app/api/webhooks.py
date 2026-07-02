@@ -1,5 +1,4 @@
-"""Clerk webhook handler — creates a default project on user.created."""
-import json
+"""Clerk webhook handler — syncs users and provisions a default project on signup."""
 import logging
 import os
 from datetime import datetime
@@ -8,7 +7,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from svix.webhooks import Webhook, WebhookVerificationError
 
 from app.repositories.assets import add_user_asset
-from app.repositories.projects import DEFAULT_PROJECT_SETTINGS, create_project
+from app.repositories.projects import DEFAULT_PROJECT_SETTINGS, create_project, get_all_projects
+from app.repositories.users import delete_user, upsert_from_clerk_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,11 @@ DEFAULT_BOOK_BRIEF = (
 )
 
 
-def _provision_default_project(user_id: str, username: str | None = None) -> None:
-    """Create a starter project so the workspace is never empty after signup."""
+def _provision_default_project(user_id: str) -> None:
+    """Create a starter project if the user has none yet."""
+    if get_all_projects(user_id):
+        return
+
     created_at = datetime.utcnow().isoformat()
     project_id = create_project(
         title=DEFAULT_BOOK_TITLE,
@@ -43,9 +46,10 @@ def _provision_default_project(user_id: str, username: str | None = None) -> Non
         added_at=created_at,
         content=DEFAULT_BOOK_BRIEF,
     )
-    logger.info("Created default project %s for user %s", project_id, user_id)
 
 
+@router.post("")
+@router.post("/")
 @router.post("/clerk")
 async def clerk_webhook(
     request: Request,
@@ -55,7 +59,7 @@ async def clerk_webhook(
 ):
     """
     Receives Clerk webhook events.
-    Currently handles: user.created → provision a default project.
+    Handles: user.created, user.updated, user.deleted
     """
     if not WEBHOOK_SECRET:
         logger.warning("CLERK_WEBHOOK_SECRET not set — skipping webhook verification.")
@@ -80,14 +84,19 @@ async def clerk_webhook(
     event_type: str = event.get("type", "")
     data: dict = event.get("data", {})
 
-    logger.info("Clerk webhook received: %s", event_type)
-
-    if event_type == "user.created":
+    if event_type in ("user.created", "user.updated"):
         user_id: str = data.get("id", "")
         if not user_id:
             raise HTTPException(status_code=400, detail="Webhook payload missing user id.")
 
-        username: str | None = data.get("username") or None
-        _provision_default_project(user_id, username)
+        upsert_from_clerk_webhook(data)
+
+        if event_type == "user.created":
+            _provision_default_project(user_id)
+
+    elif event_type == "user.deleted":
+        user_id = data.get("id", "")
+        if user_id:
+            delete_user(user_id)
 
     return {"status": "ok", "event": event_type}

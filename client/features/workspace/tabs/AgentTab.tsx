@@ -50,6 +50,7 @@ function artifactToDecisionItem(artifact: GeneratedArtifact): DecisionItem {
 interface AgentTabProps {
   book: BookProject;
   chatMessages: ChatMessage[];
+  messagesLoading?: boolean;
   isAgentThinking: boolean;
   currentAgentStatus: string;
   promptInput: string;
@@ -69,6 +70,7 @@ interface AgentTabProps {
 export default function AgentTab({
   book,
   chatMessages,
+  messagesLoading = false,
   isAgentThinking,
   currentAgentStatus,
   promptInput,
@@ -138,6 +140,7 @@ export default function AgentTab({
     <div className="relative flex flex-1 overflow-hidden bg-zinc-100">
       <AgentAssistant
         chatMessages={chatMessages}
+        messagesLoading={messagesLoading}
         isAgentThinking={isAgentThinking}
         currentAgentStatus={currentAgentStatus}
         promptInput={promptInput}

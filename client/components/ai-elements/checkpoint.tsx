@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -27,7 +26,6 @@ export const Checkpoint = ({
     {...props}
   >
     {children}
-    <Separator />
   </div>
 );
 

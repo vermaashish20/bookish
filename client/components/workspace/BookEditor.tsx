@@ -9,7 +9,9 @@ import {
   MANUSCRIPT_MARGIN_X_PX,
   MANUSCRIPT_PAGE_HEIGHT_PX,
   MANUSCRIPT_PAGE_WIDTH_PX,
+  formatChapterHeading,
   prepareChapterForDisplay,
+  stripManuscriptMarkdown,
 } from '@/lib/book/pagination';
 
 const MANUSCRIPT_BODY_HEIGHT_PX =
@@ -125,7 +127,7 @@ export default function BookEditor({
     }
   }, [pageCount, selectedPage, setSelectedPage]);
 
-  const activePageContent = chapterPages[selectedPage - 1] ?? '';
+  const activePageContent = stripManuscriptMarkdown(chapterPages[selectedPage - 1] ?? '');
 
   const renderStaticSection = () => (
     <div className="flex-1 bg-zinc-100 p-8 overflow-y-auto flex flex-col items-center">
@@ -280,23 +282,9 @@ export default function BookEditor({
         >
           <div className="overflow-hidden text-xs leading-relaxed">
             {selectedPage === 1 && (
-              <div className="mb-4">
-                <div className="flex items-center justify-center gap-2 font-sans text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-3">
-                  <span>Chapter {ch.number}</span>
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[8px] ${
-                      isPublishedChapter(ch.status)
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-amber-50 text-amber-700'
-                    }`}
-                  >
-                    {isPublishedChapter(ch.status) ? 'published' : ch.status || 'draft'}
-                  </span>
-                </div>
-                <h1 className="text-center text-sm font-semibold leading-snug tracking-tight text-zinc-900">
-                  {ch.title}
-                </h1>
-              </div>
+              <h1 className="mb-4 text-center text-base font-bold leading-snug tracking-tight text-zinc-900">
+                {formatChapterHeading(ch.number, ch.title)}
+              </h1>
             )}
 
             {rawChapterContent ? (

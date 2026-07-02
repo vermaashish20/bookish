@@ -78,34 +78,35 @@ def get_recent_chat_messages(
 
 
 def list_chat_threads(project_id: str) -> List[Dict[str, Any]]:
-    """Return chat threads inferred from message history."""
+    """Return chat threads inferred from message history (aggregation — no full scan into app)."""
     db = get_db()
-    threads: Dict[str, Dict[str, Any]] = {}
-
-    for msg in db.chat_messages.find({"projectId": project_id}).sort("createdAt", 1):
-        thread_id = msg.get("threadId") or msg.get("sessionId")
-        if not thread_id:
-            continue
-        thread = threads.setdefault(
-            thread_id,
+    pipeline = [
+        {"$match": {"projectId": project_id}},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$threadId", "$sessionId"]},
+                "messageCount": {"$sum": 1},
+                "createdAt": {"$min": "$createdAt"},
+                "updatedAt": {"$max": "$createdAt"},
+            }
+        },
+        {"$match": {"_id": {"$ne": None}}},
+        {"$sort": {"updatedAt": -1}},
+    ]
+    threads: List[Dict[str, Any]] = []
+    for row in db.chat_messages.aggregate(pipeline):
+        thread_id = row["_id"]
+        threads.append(
             {
                 "id": thread_id,
                 "threadId": thread_id,
                 "title": "New chat",
-                "messageCount": 0,
-                "createdAt": None,
-                "updatedAt": None,
-            },
+                "messageCount": row.get("messageCount", 0),
+                "createdAt": row.get("createdAt"),
+                "updatedAt": row.get("updatedAt"),
+            }
         )
-        thread["messageCount"] += 1
-        thread["createdAt"] = thread["createdAt"] or msg.get("createdAt")
-        thread["updatedAt"] = msg.get("createdAt")
-
-    return sorted(
-        threads.values(),
-        key=lambda item: item.get("updatedAt") or item.get("createdAt") or "",
-        reverse=True,
-    )
+    return threads
 
 
 def create_chat_thread(project_id: str) -> Dict[str, Any]:
